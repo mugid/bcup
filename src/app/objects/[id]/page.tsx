@@ -194,7 +194,7 @@ export default function ObjectPage() {
   return (
     <main className="mx-auto min-h-dvh w-full max-w-2xl bg-page px-4 pb-12 pt-4 text-fg sm:px-6 sm:pt-8">
       <header className="flex h-14 items-center justify-between gap-3">
-        <Link href="/" aria-label="Back to collections" className="flex size-(--control-lg) items-center justify-center rounded-control text-fg hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"><ArrowLeft aria-hidden="true" /></Link>
+        <Link href="/" aria-label="Back to collections" className="flex size-(--control-lg) items-center justify-center rounded-control text-fg hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"><ArrowLeft aria-hidden="true" width={20} height={20} /></Link>
         <Button variant="danger-ghost" size="icon" pending={deleting} aria-label="Delete object" onClick={() => void deleteObject()}><Trash aria-hidden="true" /></Button>
       </header>
       {!ownerId ? <p role="alert">{error || "This object is unavailable."}</p> : photoResults === undefined || categoryResults === undefined ? null : photo === null ? (
