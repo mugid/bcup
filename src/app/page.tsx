@@ -390,8 +390,9 @@ export default function Home() {
   return (
     <div className="relative min-h-dvh bg-page text-fg">
       {activeCategoryId !== null && <div aria-hidden="true" onPointerDown={() => requestCloseCategory()} className={`category-backdrop fixed inset-0 z-[calc(var(--z-dialog)-1)] bg-scrim ${closingCategory ? "category-backdrop-exit" : ""} ${instantCategory || closingInstant ? "category-backdrop-instant" : ""}`} />}
-      <div className="absolute left-4 top-4 z-10">
+      <div className="absolute inset-x-4 top-4 z-10 flex items-center justify-between gap-3 sm:inset-x-6">
         <LanguagePicker value={language} onChange={handleLanguageChange} />
+        <Button variant="outline" onClick={() => { window.location.href = "/upgrade"; }}>See Plus plan</Button>
       </div>
       <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-4 py-8 sm:px-6">
         {!ownerId ? <p role="alert" className="pt-20 text-sm text-danger-text">{error}</p> : !dataReady ? null : photos.length === 0 && clips.length === 0 && !isPreparing ? (
