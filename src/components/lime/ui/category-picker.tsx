@@ -3,23 +3,23 @@
 import { Select } from "@base-ui/react/select";
 import { Checkmark, ChevronDown, Icon } from "@/components/lime/icon";
 import { useLimePortal } from "@/lib/lime/portal";
-import type { Category } from "@/lib/photo-store";
+import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
 type CategoryPickerProps = {
-  categories: Category[];
-  value: number | null;
-  onChange: (categoryId: number | null) => void;
+  categories: Doc<"categories">[];
+  value: Id<"categories"> | null;
+  onChange: (categoryId: Id<"categories"> | null) => void;
 };
 
 export function CategoryPicker({ categories, value, onChange }: CategoryPickerProps) {
   const portal = useLimePortal();
-  const selectedName = categories.find((category) => category.id === value)?.name ?? "Uncategorized";
+  const selectedName = categories.find((category) => category._id === value)?.name ?? "Uncategorized";
 
   return (
     <Select.Root<string>
       value={value === null ? "uncategorized" : String(value)}
       onValueChange={(next) => {
-        if (next) onChange(next === "uncategorized" ? null : Number(next));
+        if (next) onChange(next === "uncategorized" ? null : next as Id<"categories">);
       }}
     >
       <Select.Trigger
@@ -38,7 +38,7 @@ export function CategoryPicker({ categories, value, onChange }: CategoryPickerPr
                 <Select.ItemIndicator className="ml-auto"><Icon icon={Checkmark} size={16} /></Select.ItemIndicator>
               </Select.Item>
               {categories.map((category) => (
-                <Select.Item key={category.id} value={String(category.id)} className="flex h-(--control-md) cursor-default items-center gap-2 rounded-field px-3 text-sm text-fg data-highlighted:bg-surface-2 data-selected:bg-accent-wash">
+                <Select.Item key={category._id} value={category._id} className="flex h-(--control-md) cursor-default items-center gap-2 rounded-field px-3 text-sm text-fg data-highlighted:bg-surface-2 data-selected:bg-accent-wash">
                   <Select.ItemText>{category.name}</Select.ItemText>
                   <Select.ItemIndicator className="ml-auto"><Icon icon={Checkmark} size={16} /></Select.ItemIndicator>
                 </Select.Item>

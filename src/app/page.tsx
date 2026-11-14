@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useConvex, useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import { Icon, Image } from "@/components/lime/icon";
 import { Button } from "@/components/lime/ui/button";
 import { CategoryPicker } from "@/components/lime/ui/category-picker";
@@ -10,19 +13,8 @@ import { Field, FieldLabel } from "@/components/lime/ui/field";
 import { Input } from "@/components/lime/ui/input";
 import { LanguagePicker } from "@/components/lime/ui/language-picker";
 import { isLanguage, type Language } from "@/lib/languages";
-import {
-  applyIdentification,
-  assignPhotoCategory,
-  createCategory,
-  openPhotoDatabase,
-  readCategories,
-  readPhotos,
-  savePhotos,
-  type Category,
-  type SavedPhoto,
-} from "@/lib/photo-store";
-
-type DisplayPhoto = SavedPhoto & { url: string };
+type Photo = NonNullable<ReturnType<typeof useQuery<typeof api.photos.list>>>[number];
+type IdentifiablePhoto = Pick<Photo, "_id" | "url">;
 
 async function resizeForIdentification(file: Blob): Promise<Blob> {
   const bitmap = await createImageBitmap(file);
@@ -44,21 +36,41 @@ async function resizeForIdentification(file: Blob): Promise<Blob> {
 }
 
 export default function Home() {
-  const databaseRef = useRef<IDBDatabase | null>(null);
-  const urlsRef = useRef<string[]>([]);
+  const convex = useConvex();
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const photoResults = useQuery(api.photos.list, ownerId ? { ownerId } : "skip");
+  const categoryResults = useQuery(api.categories.list, ownerId ? { ownerId } : "skip");
+  const photos = photoResults ?? [];
+  const categories = categoryResults ?? [];
+  const dataReady = photoResults !== undefined && categoryResults !== undefined;
+  const createPhoto = useMutation(api.photos.create);
+  const generateUploadUrl = useMutation(api.photos.generateUploadUrl);
+  const createCategory = useMutation(api.categories.create);
+  const assignPhotoCategory = useMutation(api.photos.assignCategory);
+  const applyIdentification = useMutation(api.photos.applyIdentification);
   const identificationQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const [photos, setPhotos] = useState<DisplayPhoto[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [activeCategory, setActiveCategory] = useState<number | "all" | "uncategorized">("all");
+  const [activeCategory, setActiveCategory] = useState<Id<"categories"> | "all" | "uncategorized">("all");
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [categoryName, setCategoryName] = useState("");
   const [createCategoryError, setCreateCategoryError] = useState("");
-  const [categoryErrors, setCategoryErrors] = useState<Record<number, string>>({});
-  const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
-  const [photoErrors, setPhotoErrors] = useState<Record<number, string>>({});
-  const [loading, setLoading] = useState(true);
+  const [categoryErrors, setCategoryErrors] = useState<Record<string, string>>({});
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const [photoErrors, setPhotoErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [language, setLanguage] = useState<Language>("Spanish");
+
+  useEffect(() => {
+    try {
+      let saved = localStorage.getItem("bcup-owner-id");
+      if (!saved) {
+        saved = crypto.randomUUID();
+        localStorage.setItem("bcup-owner-id", saved);
+      }
+      setOwnerId(saved);
+    } catch {
+      setError("Browser storage is required to access your photos.");
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -78,58 +90,22 @@ export default function Home() {
     }
   }
 
-  useEffect(() => {
-    let active = true;
-    let database: IDBDatabase | null = null;
-
-    openPhotoDatabase()
-      .then(async (opened) => {
-        database = opened;
-        if (!active) {
-          opened.close();
-          return;
-        }
-        databaseRef.current = opened;
-        const [saved, storedCategories] = await Promise.all([
-          readPhotos(opened),
-          readCategories(opened),
-        ]);
-        if (!active) return;
-        const displayed = saved.map((photo) => ({
-          ...photo,
-          url: URL.createObjectURL(photo.file),
-        }));
-        urlsRef.current = displayed.map((photo) => photo.url);
-        setPhotos(displayed);
-        setCategories(storedCategories);
-      })
-      .catch(() => {
-        if (active) setError("Photos could not be loaded. Please try again.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-      database?.close();
-      databaseRef.current = null;
-      urlsRef.current.forEach(URL.revokeObjectURL);
-      urlsRef.current = [];
-    };
-  }, []);
-
-  async function identifyPhoto(photo: SavedPhoto, photoLanguage: Language) {
+  async function identifyPhoto(photo: IdentifiablePhoto, photoLanguage: Language, sourceFile?: Blob) {
     try {
-      const database = databaseRef.current;
-      if (!database) return;
-      const resized = await resizeForIdentification(photo.file);
-      if (!databaseRef.current) return;
+      if (!ownerId) return;
+      const file = sourceFile ?? (photo.url
+        ? await fetch(photo.url).then((response) => {
+          if (!response.ok) throw new Error("Photo could not be loaded.");
+          return response.blob();
+        })
+        : null);
+      if (!file) throw new Error("Photo could not be loaded.");
+      const resized = await resizeForIdentification(file);
       const form = new FormData();
       form.append("photo", resized, "photo.jpg");
       form.append("language", photoLanguage);
-      const existingCategories = await readCategories(database);
-      form.append("categories", JSON.stringify(existingCategories.map((category) => category.name)));
+      const currentCategories = await convex.query(api.categories.list, { ownerId });
+      form.append("categories", JSON.stringify(currentCategories.map((category) => category.name)));
       const response = await fetch("/api/identify", { method: "POST", body: form });
       const result: unknown = await response.json();
       if (!response.ok) {
@@ -146,50 +122,39 @@ export default function Home() {
           !(typeof suggestedCategory === "string" || suggestedCategory === null)) {
         throw new Error("Invalid identification result");
       }
-      const updated = await applyIdentification(database, photo.id, photoLanguage, label, suggestedCategory);
-      setPhotos((current) => current.map((item) => item.id === photo.id
-        ? {
-          ...item,
-          language: photoLanguage,
-          label,
-          categoryId: item.categorySource === "manual" ? item.categoryId : updated.photo.categoryId,
-          categorySource: item.categorySource === "manual" ? "manual" : updated.photo.categorySource,
-        }
-        : item));
-      if (updated.category) setCategories(await readCategories(database));
+      await applyIdentification({ ownerId, photoId: photo._id, language: photoLanguage, label, suggestedCategory });
       setPhotoErrors((current) => {
         const next = { ...current };
-        delete next[photo.id];
+        delete next[photo._id];
         return next;
       });
     } catch (error) {
-      if (!databaseRef.current) return;
       setPhotoErrors((current) => ({
         ...current,
-        [photo.id]: error instanceof Error ? error.message : "Could not identify the object.",
+        [photo._id]: error instanceof Error ? error.message : "Could not identify the object.",
       }));
     } finally {
       setPendingIds((current) => {
         const next = new Set(current);
-        next.delete(photo.id);
+        next.delete(photo._id);
         return next;
       });
     }
   }
 
-  function queueIdentification(photo: SavedPhoto, photoLanguage: Language) {
-    setPendingIds((current) => new Set(current).add(photo.id));
+  function queueIdentification(photo: IdentifiablePhoto, photoLanguage: Language, sourceFile?: Blob) {
+    setPendingIds((current) => new Set(current).add(photo._id));
     setPhotoErrors((current) => {
       const next = { ...current };
-      delete next[photo.id];
+      delete next[photo._id];
       return next;
     });
     identificationQueueRef.current = identificationQueueRef.current
-      .then(() => identifyPhoto(photo, photoLanguage))
+      .then(() => identifyPhoto(photo, photoLanguage, sourceFile))
       .catch(() => {
         setPendingIds((current) => {
           const next = new Set(current);
-          next.delete(photo.id);
+          next.delete(photo._id);
           return next;
         });
       });
@@ -197,11 +162,9 @@ export default function Home() {
 
   async function handleCreateCategory(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const database = databaseRef.current;
-    if (!database) return;
+    if (!ownerId) return;
     try {
-      await createCategory(database, categoryName);
-      setCategories(await readCategories(database));
+      await createCategory({ ownerId, value: categoryName });
       setActiveCategory("all");
       setCategoryName("");
       setCreateCategoryError("");
@@ -211,14 +174,10 @@ export default function Home() {
     }
   }
 
-  async function handleCategoryChange(photoId: number, categoryId: number | null) {
-    const database = databaseRef.current;
-    if (!database) return;
+  async function handleCategoryChange(photoId: Id<"photos">, categoryId: Id<"categories"> | null) {
+    if (!ownerId) return;
     try {
-      const updated = await assignPhotoCategory(database, photoId, categoryId);
-      setPhotos((current) => current.map((photo) => photo.id === photoId
-        ? { ...photo, categoryId: updated.categoryId, categorySource: "manual" }
-        : photo));
+      await assignPhotoCategory({ ownerId, photoId, categoryId });
       setCategoryErrors((current) => {
         const next = { ...current };
         delete next[photoId];
@@ -233,8 +192,7 @@ export default function Home() {
   }
 
   async function handlePhotoSelection(files: FileList) {
-    const database = databaseRef.current;
-    if (!database) return;
+    if (!ownerId) return;
     const selected = Array.from(files).filter((file) => file.type.startsWith("image/"));
     if (selected.length === 0) {
       setError("Choose a photo to add.");
@@ -242,12 +200,15 @@ export default function Home() {
     }
 
     try {
-      const saved = await savePhotos(database, selected, language);
-      const displayed = saved.map((photo) => ({ ...photo, url: URL.createObjectURL(photo.file) }));
-      urlsRef.current.push(...displayed.map((photo) => photo.url));
-      setPhotos((current) => [...current, ...displayed]);
+      for (const file of selected) {
+        const uploadUrl = await generateUploadUrl({});
+        const response = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": file.type }, body: file });
+        if (!response.ok) throw new Error("Upload failed.");
+        const { storageId } = await response.json() as { storageId: Id<"_storage"> };
+        const photoId = await createPhoto({ ownerId, storageId, language });
+        queueIdentification({ _id: photoId, url: null }, language, file);
+      }
       setError("");
-      saved.forEach((photo) => queueIdentification(photo, language));
     } catch {
       setError("Photos could not be saved. Please try again.");
     }
@@ -290,7 +251,7 @@ export default function Home() {
         <LanguagePicker value={language} onChange={handleLanguageChange} />
       </div>
       <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-4 py-8 sm:px-6">
-        {loading ? null : photos.length === 0 ? (
+        {!ownerId ? <p role="alert" className="pt-20 text-sm text-danger-text">{error}</p> : !dataReady ? null : photos.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
             <Icon icon={Image} size={48} className="text-fg-2" />
             <div className="flex flex-col gap-2">
@@ -320,8 +281,8 @@ export default function Home() {
               <Chip selected={activeCategory === "all"} onClick={() => setActiveCategory("all")}>All photos ({photos.length})</Chip>
               <Chip selected={activeCategory === "uncategorized"} onClick={() => setActiveCategory("uncategorized")}>Uncategorized ({photos.filter((photo) => photo.categoryId == null).length})</Chip>
               {categories.map((category) => (
-                <Chip key={category.id} selected={activeCategory === category.id} onClick={() => setActiveCategory(category.id)}>
-                  {category.name} ({photos.filter((photo) => photo.categoryId === category.id).length})
+                <Chip key={category._id} selected={activeCategory === category._id} onClick={() => setActiveCategory(category._id)}>
+                  {category.name} ({photos.filter((photo) => photo.categoryId === category._id).length})
                 </Chip>
               ))}
             </div>
@@ -332,15 +293,14 @@ export default function Home() {
               </div>
             ) : <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               {visiblePhotos.map((photo) => {
-                const pending = pendingIds.has(photo.id);
-                const photoError = photoErrors[photo.id];
-                const categoryError = categoryErrors[photo.id];
+                const pending = pendingIds.has(photo._id);
+                const photoError = photoErrors[photo._id];
+                const categoryError = categoryErrors[photo._id];
                 return (
-                  <figure key={photo.id} className="flex min-w-0 flex-col gap-2">
-                    {/* Local object URLs need a plain image element. */}
+                  <figure key={photo._id} className="flex min-w-0 flex-col gap-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={photo.url}
+                      src={photo.url ?? undefined}
                       alt={photo.label ? `Photo of ${photo.label}` : "Saved photo"}
                       className="aspect-square w-full rounded-panel bg-surface object-cover"
                     />
@@ -353,13 +313,13 @@ export default function Home() {
                       {photo.label !== undefined && pending && <span className="text-xs text-fg-2">Identifying…</span>}
                       {photoError && <span role="alert" className="text-xs text-danger-text">{photoError}</span>}
                       <span className="mt-2 text-sm text-fg-2">Category</span>
-                      <CategoryPicker categories={categories} value={photo.categoryId ?? null} onChange={(categoryId) => void handleCategoryChange(photo.id, categoryId)} />
+                      <CategoryPicker categories={categories} value={photo.categoryId ?? null} onChange={(categoryId) => void handleCategoryChange(photo._id, categoryId)} />
                       {categoryError && <span role="alert" className="text-sm text-danger-text">{categoryError}</span>}
                       <Button
                         variant="secondary"
                         size="sm"
                         pending={pending}
-                        onClick={() => queueIdentification(photo, photo.language ?? language)}
+                        onClick={() => queueIdentification(photo, isLanguage(photo.language) ? photo.language : language)}
                       >
                         {photo.language ? "Retry AI" : "Identify"}
                       </Button>
