@@ -10,6 +10,7 @@ export default defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "convex/_generated/**",
     ".agents/**",
     ".claude/**",
     "src/components/lime/**",

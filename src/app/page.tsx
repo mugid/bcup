@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import { Icon, Image } from "@/components/lime/icon";
 import { Dropzone } from "@/components/lime/ui/dropzone";
 import { LanguagePicker, LANGUAGES, type Language } from "@/components/lime/ui/language-picker";
 
 const DATABASE_NAME = "bcup-photos";
 const STORE_NAME = "photos";
+const OWNER_TOKEN_KEY = "bcup-photo-owner";
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 
 type SavedPhoto = { id: number; file: Blob };
-type DisplayPhoto = { id: number; url: string };
 
 function openPhotoDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -33,26 +37,24 @@ function readPhotos(database: IDBDatabase): Promise<SavedPhoto[]> {
   });
 }
 
-function savePhotos(database: IDBDatabase, files: FileList): Promise<void> {
+function deleteLegacyPhoto(database: IDBDatabase, id: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(STORE_NAME, "readwrite");
-    for (const file of Array.from(files)) {
-      if (file.type.startsWith("image/")) {
-        transaction.objectStore(STORE_NAME).add({ file });
-      }
-    }
+    transaction.objectStore(STORE_NAME).delete(id);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
   });
 }
 
 export default function Home() {
-  const databaseRef = useRef<IDBDatabase | null>(null);
-  const urlsRef = useRef<string[]>([]);
-  const [photos, setPhotos] = useState<DisplayPhoto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [ownerToken, setOwnerToken] = useState<string | null>(null);
+  const [migrating, setMigrating] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [language, setLanguage] = useState<Language>("Spanish");
+  const photos = useQuery(api.photos.list, ownerToken ? { ownerToken } : "skip");
+  const generateUploadUrl = useMutation(api.photos.generateUploadUrl);
+  const savePhoto = useMutation(api.photos.save);
 
   useEffect(() => {
     let active = true;
@@ -80,60 +82,90 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
-    let database: IDBDatabase | null = null;
-
-    openPhotoDatabase()
-      .then(async (opened) => {
-        database = opened;
-        if (!active) {
-          opened.close();
-          return;
-        }
-        databaseRef.current = opened;
-        const saved = await readPhotos(opened);
-        if (!active) return;
-        const displayed = saved.map((photo) => ({
-          id: photo.id,
-          url: URL.createObjectURL(photo.file),
-        }));
-        urlsRef.current = displayed.map((photo) => photo.url);
-        setPhotos(displayed);
-      })
-      .catch(() => {
-        if (active) setError("Photos could not be loaded. Please try again.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+    try {
+      let token = localStorage.getItem(OWNER_TOKEN_KEY);
+      if (!token) {
+        token = crypto.randomUUID();
+        localStorage.setItem(OWNER_TOKEN_KEY, token);
+      }
+      queueMicrotask(() => { if (active) setOwnerToken(token); });
+    } catch {
+      queueMicrotask(() => {
+        if (active) setError("Browser storage is required to save photos.");
       });
-
-    return () => {
-      active = false;
-      database?.close();
-      databaseRef.current = null;
-      urlsRef.current.forEach(URL.revokeObjectURL);
-      urlsRef.current = [];
-    };
+    }
+    return () => { active = false; };
   }, []);
 
-  async function handlePhotoSelection(files: FileList) {
-    const database = databaseRef.current;
-    if (!database) return;
+  async function uploadPhoto(file: Blob, selectedLanguage: Language, legacyId?: number) {
+    if (!ownerToken) throw new Error("Photo storage is not ready");
+    if (!file.type.startsWith("image/") || file.size > MAX_PHOTO_BYTES) {
+      throw new Error("Only images up to 10 MB can be saved.");
+    }
 
+    const uploadUrl = await generateUploadUrl({ ownerToken });
+    const response = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+    if (!response.ok) throw new Error("Photo upload failed. Please try again.");
+
+    const result: unknown = await response.json();
+    if (!result || typeof result !== "object" || !("storageId" in result) || typeof result.storageId !== "string") {
+      throw new Error("Photo upload failed. Please try again.");
+    }
+    const saved = await savePhoto({
+      ownerToken,
+      storageId: result.storageId as Id<"_storage">,
+      language: selectedLanguage,
+      legacyId,
+    });
+    if (!saved.ok) throw new Error(saved.message);
+  }
+
+  useEffect(() => {
+    if (!ownerToken) return;
+    let active = true;
+    let database: IDBDatabase | null = null;
+
+    async function migrateLegacyPhotos() {
+      try {
+        database = await openPhotoDatabase();
+        const saved = await readPhotos(database);
+        for (const photo of saved) {
+          await uploadPhoto(photo.file, language, photo.id);
+          await deleteLegacyPhoto(database, photo.id);
+        }
+      } catch {
+        if (active) setError("Some earlier photos could not be transferred. Please try again later.");
+      } finally {
+        database?.close();
+        if (active) setMigrating(false);
+      }
+    }
+
+    void migrateLegacyPhotos();
+    return () => { active = false; };
+    // The migration runs when the browser identity is ready; the current language is captured once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerToken]);
+
+  async function handlePhotoSelection(files: FileList) {
+    setUploading(true);
+    setError("");
     try {
-      await savePhotos(database, files);
-      const saved = await readPhotos(database);
-      const displayed = saved.map((photo) => ({
-        id: photo.id,
-        url: URL.createObjectURL(photo.file),
-      }));
-      urlsRef.current.forEach(URL.revokeObjectURL);
-      urlsRef.current = displayed.map((photo) => photo.url);
-      setPhotos(displayed);
-      setError("");
-    } catch {
-      setError("Photos could not be saved. Please try again.");
+      for (const file of Array.from(files)) {
+        await uploadPhoto(file, language);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Photos could not be saved. Please try again.");
+    } finally {
+      setUploading(false);
     }
   }
+
+  const loading = !error && (!ownerToken || photos === undefined || migrating);
 
   return (
     <div className="relative min-h-dvh bg-page text-fg">
@@ -141,7 +173,7 @@ export default function Home() {
         <LanguagePicker value={language} onChange={handleLanguageChange} />
       </div>
       <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-4 py-8 sm:px-6">
-      {loading ? null : photos.length === 0 ? (
+      {loading ? null : !photos?.length ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
           <Icon icon={Image} size={48} className="text-fg-2" />
           <div className="flex flex-col gap-2">
@@ -152,7 +184,7 @@ export default function Home() {
               Add your first photo to see it here.
             </p>
           </div>
-          <Dropzone size="lg" onFilesSelected={handlePhotoSelection} />
+          <Dropzone size="lg" disabled={!ownerToken || migrating} pending={uploading} onFilesSelected={handlePhotoSelection} />
           {error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
         </div>
       ) : (
@@ -161,12 +193,12 @@ export default function Home() {
             <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">
               Your photos
             </h1>
-            <Dropzone onFilesSelected={handlePhotoSelection} />
+            <Dropzone pending={uploading} onFilesSelected={handlePhotoSelection} />
           </div>
           {error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {photos.map((photo) => (
-              // Local object URLs need a plain image element.
+              // Convex serves the saved photo from its file storage URL.
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 key={photo.id}

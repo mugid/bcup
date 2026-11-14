@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "@/components/lime/styles.css";
 import { LimePortalProvider } from "@/lib/lime/portal";
+import { ConvexClientProvider } from "./convex-provider";
 
 export const metadata: Metadata = {
   title: "BCup",
@@ -12,7 +13,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className="lime">
-        <LimePortalProvider>{children}</LimePortalProvider>
+        <ConvexClientProvider>
+          <LimePortalProvider>{children}</LimePortalProvider>
+        </ConvexClientProvider>
       </body>
     </html>
   );
