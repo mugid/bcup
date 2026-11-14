@@ -7,7 +7,7 @@ import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { Icon, Image } from "@/components/lime/icon";
-import { Spinner } from "@/components/lime/ui/button";
+import { Button, Spinner } from "@/components/lime/ui/button";
 import { Dropzone } from "@/components/lime/ui/dropzone";
 import { LanguagePicker } from "@/components/lime/ui/language-picker";
 import { isLanguage, type Language } from "@/lib/languages";
@@ -234,9 +234,12 @@ export default function Home() {
           </div>
         ) : (
           <div className="flex flex-col gap-6 pt-20">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">Your photos</h1>
-              <Dropzone onFilesSelected={handlePhotoSelection} disabled={isPreparing} />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" onClick={() => { window.location.href = "/quiz"; }}>Practice words</Button>
+                <Dropzone onFilesSelected={handlePhotoSelection} disabled={isPreparing} />
+              </div>
             </div>
             {(isPreparing || pendingIds.size > 0) && (
               <p role="status" className="flex items-center gap-2 text-sm text-fg-2">

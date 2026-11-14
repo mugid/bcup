@@ -46,6 +46,7 @@ const buttonVariants = cva(
         'icon-sm': 'size-(--control-sm) px-0',
         icon: 'size-(--control-md) px-0',
         'icon-lg': 'size-(--control-lg) px-0',
+        'icon-round': 'size-(--control-lg) rounded-full px-0',
       },
     },
     compoundVariants: [

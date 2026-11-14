@@ -49,6 +49,18 @@ export function Folder(props: SVGProps<SVGSVGElement>) {
   return <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M3 6h7l2 2h9v11H3V6Z" /></svg>;
 }
 
+export function Microphone(props: SVGProps<SVGSVGElement>) {
+  return <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="9" y="3" width="6" height="12" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8" /></svg>;
+}
+
+export function Stop(props: SVGProps<SVGSVGElement>) {
+  return <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" {...props}><rect x="6" y="6" width="12" height="12" rx="2" /></svg>;
+}
+
+export function Retry(props: SVGProps<SVGSVGElement>) {
+  return <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M20 11a8 8 0 1 1-2.3-5.7M20 4v6h-6" /></svg>;
+}
+
 export function Icon({ icon: Glyph, size = 32, className }: { icon: Glyph; size?: number; className?: string }) {
   return <Glyph width={size} height={size} className={className} aria-hidden="true" />;
 }

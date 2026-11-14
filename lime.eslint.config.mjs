@@ -32,7 +32,7 @@ const lime = (await import(pathToFileURL(plugin).href)).default;
 const {LINT_IGNORES} = await import(pathToFileURL(join(dirname(plugin), 'value-rules.mjs')).href);
 
 export default [
-  {ignores: [...LINT_IGNORES, '**/lib/lime/lint/**']},
+  {ignores: [...LINT_IGNORES, '.next-dev/**', '**/lib/lime/lint/**']},
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
     languageOptions: {parser: tsParser, parserOptions: {ecmaFeatures: {jsx: true}}},
