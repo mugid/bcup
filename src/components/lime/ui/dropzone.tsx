@@ -6,11 +6,9 @@ import { Button } from "@/components/lime/ui/button";
 type DropzoneProps = {
   onFilesSelected: (files: FileList) => void | Promise<void>;
   size?: "md" | "lg";
-  disabled?: boolean;
-  pending?: boolean;
 };
 
-export function Dropzone({ onFilesSelected, size = "md", disabled, pending }: DropzoneProps) {
+export function Dropzone({ onFilesSelected, size = "md" }: DropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -29,7 +27,7 @@ export function Dropzone({ onFilesSelected, size = "md", disabled, pending }: Dr
           event.target.value = "";
         }}
       />
-      <Button size={size} disabled={disabled} pending={pending} onClick={() => inputRef.current?.click()}>
+      <Button size={size} onClick={() => inputRef.current?.click()}>
         Take a photo
       </Button>
     </>

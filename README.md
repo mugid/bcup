@@ -21,10 +21,8 @@ The Convex CLI creates `.env.local` with `NEXT_PUBLIC_CONVEX_URL` when you
 select a deployment. Open http://localhost:3000. The product brief is in
 [task.md](task.md).
 
-Photos are stored in Convex File Storage and their records in the `photos`
-table. The app uses a random token saved in the browser to separate galleries
-until account sign-in is added. Clearing browser storage loses access to that
-gallery, and the same gallery is not available on another device yet.
+Convex is connected, but the current photo screen still saves photos in this
+browser. The `photos` table is reserved for a later backend photo flow.
 
 ## Checks
 
