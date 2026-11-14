@@ -1,4 +1,4 @@
-# BCup
+# Blobe
 
 Next.js App Router project using TypeScript, Tailwind CSS, ESLint, Convex, and pnpm.
 The UI uses the [Lime design system](https://design.how/systems/lime). Follow

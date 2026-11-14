@@ -210,7 +210,6 @@ export default function ObjectPage() {
             <span>{photo.pronunciation || "Transcript unavailable"}</span>
             <Button variant="ghost" size="icon-sm" pending={audioBusyKey === "word"} aria-label={`Hear ${photo.label ?? "object"} pronounced`} disabled={!photo.label} onClick={() => { if (photo.label) void playAudio(photo.label, "word", photo.audioUrl); }}><Speaker aria-hidden="true" /></Button>
           </div>
-          <p className="text-xs text-fg-3">AI-generated voice</p>
           <Button variant="outline" className="mt-6" pending={sentencesPending} disabled={!photo.label} onClick={() => void openSentences()}>See in sentences</Button>
           {error && <p role="alert" className="mt-5 text-sm text-danger-text">{error}</p>}
           <section className="mt-16 w-full max-w-md sm:mt-20" aria-label="Collections">
@@ -247,7 +246,6 @@ export default function ObjectPage() {
             {sentencesPending && <p role="status" className="flex items-center gap-2 text-sm text-fg-2"><Spinner />Loading sentences…</p>}
             {sentencesError && <div role="alert" className="flex flex-col items-start gap-2 text-sm text-danger-text"><p>{sentencesError}</p><Button variant="outline" size="sm" onClick={() => void openSentences()}>Try again</Button></div>}
             {sentences && <ul className="flex flex-col gap-4">{sentences.map((sentence, index) => <li key={index} className="rounded-panel bg-surface p-4"><div className="flex items-start justify-between gap-3"><p className="text-base"><HighlightedSentence text={sentence.text} word={photo?.label ?? ""} /></p><Button variant="ghost" size="icon-sm" pending={audioBusyKey === `sentence-${index}`} aria-label={`Hear sentence ${index + 1}`} onClick={() => void playAudio(sentence.text, `sentence-${index}`, sentence.audioUrl, index)}><Speaker aria-hidden="true" /></Button></div><p className="mt-2 text-sm text-fg-2">{sentence.translation}</p></li>)}</ul>}
-            <p className="text-xs text-fg-3">Audio is AI-generated.</p>
           </Dialog.Popup>
         </Dialog.Portal>
       </Dialog.Root>

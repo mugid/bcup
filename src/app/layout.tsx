@@ -5,7 +5,7 @@ import { LimePortalProvider } from "@/lib/lime/portal";
 import { ConvexClientProvider } from "./convex-provider";
 
 export const metadata: Metadata = {
-  title: "BCup",
+  title: "Blobe",
   description: "A new web product for working adults.",
 };
 

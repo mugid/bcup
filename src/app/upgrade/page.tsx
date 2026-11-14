@@ -71,7 +71,7 @@ export default function UpgradePage() {
             </div>
 
             <section className="flex flex-col gap-3">
-              <h2 className="text-lg font-semibold">What you can do with BCup</h2>
+              <h2 className="text-lg font-semibold">What you can do with Blobe</h2>
               <ul className="flex flex-col gap-4">
                 <li className="flex items-start gap-3"><Checkmark aria-hidden="true" className="mt-1 shrink-0 text-accent-line" /><span className="text-base">Turn photos into words in the language you are learning.</span></li>
                 <li className="flex items-start gap-3"><Checkmark aria-hidden="true" className="mt-1 shrink-0 text-accent-line" /><span className="text-base">Learn useful phrases from your short videos.</span></li>
@@ -89,7 +89,7 @@ export default function UpgradePage() {
         {step === "review" && (
           <div className="flex flex-1 flex-col gap-8 pt-8">
             <section className="flex flex-col gap-3">
-              <h2 className="text-lg font-semibold">BCup Plus demo</h2>
+              <h2 className="text-lg font-semibold">Blobe Plus demo</h2>
               <div className="flex items-baseline justify-between gap-4 border-b border-line pb-4 text-base">
                 <span>Monthly subscription</span>
                 <span className="font-semibold tabular-nums">{monthlyPrice} / month</span>
@@ -107,7 +107,7 @@ export default function UpgradePage() {
           <div className="flex flex-1 flex-col gap-6 pt-8">
             <div className="flex flex-col gap-3">
               <h2 className="text-lg font-semibold">Demo subscription activated</h2>
-              <p className="text-base text-fg-2">Your BCup Plus demo is active in this browser. No payment was collected and your access to features is unchanged.</p>
+              <p className="text-base text-fg-2">Your Blobe Plus demo is active in this browser. No payment was collected and your access to features is unchanged.</p>
             </div>
             <div className="mt-auto flex flex-col gap-3 pt-4">
               <Button variant="solid" size="lg" className="w-full" onClick={() => { window.location.href = "/"; }}>Return to collection</Button>

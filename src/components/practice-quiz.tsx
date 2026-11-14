@@ -262,7 +262,6 @@ export function PracticeQuiz({ ownerId, language }: { ownerId: string | null; la
     <div>
       {stage === "setup" && (
         <div className="mx-auto flex w-full max-w-md flex-col gap-8 pt-8">
-          <p className="text-base text-fg-2">Practice words in {language}. Change the language in the deck below.</p>
           <section className="flex flex-col gap-3">
             <h2 className="text-lg font-semibold">Choose collections</h2>
             <p className="text-base text-fg-2">Choose one or more, or use all collections.</p>
@@ -280,7 +279,6 @@ export function PracticeQuiz({ ownerId, language }: { ownerId: string | null; la
           {error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
           <Button size="lg" disabled={!ownerId || photosResult === undefined || clipsResult === undefined || categoriesResult === undefined || chosenCount < 1 || !Number.isInteger(chosenCount)} onClick={startQuiz}>Start quiz</Button>
           {ownerId && photosResult !== undefined && clipsResult !== undefined && eligible.length === 0 && <p className="text-base text-fg-2">No words match these choices. Add photos or videos to start practicing.</p>}
-          <p className="text-base text-fg-2">Recorded answers are sent for speech recognition after you pause or stop recording.</p>
         </div>
       )}
 

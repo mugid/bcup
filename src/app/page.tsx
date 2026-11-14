@@ -471,7 +471,7 @@ export default function Home() {
     <div className="relative min-h-dvh bg-page text-fg">
       {activeCategoryId !== null && <div aria-hidden="true" onPointerDown={() => requestCloseCategory()} className={`category-backdrop fixed inset-0 z-[calc(var(--z-dialog)-1)] bg-scrim ${closingCategory ? "category-backdrop-exit" : ""} ${instantCategory || closingInstant ? "category-backdrop-instant" : ""}`} />}
       <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-4 pt-8 pb-52 sm:px-6 sm:pb-28">
-        <h1 className="sr-only">BCup</h1>
+        <h1 className="sr-only">Blobe</h1>
         {!ownerId && error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
         <Tabs.Root value={activeTab} onValueChange={(value) => { if (isHomeTab(value)) changeTab(value); }}>
           <Tabs.List aria-label="Library" className="flex items-center justify-between gap-2 overflow-x-auto border-b border-line">
