@@ -1,8 +1,8 @@
-export async function resizeForIdentification(file: Blob): Promise<Blob> {
+export async function resizeForIdentification(file: Blob, maxEdge = 1600): Promise<Blob> {
   const bitmap = await createImageBitmap(file);
   try {
     if (!bitmap.width || !bitmap.height) throw new Error("Invalid image dimensions");
-    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(bitmap.width * scale);
     canvas.height = Math.round(bitmap.height * scale);

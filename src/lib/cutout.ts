@@ -53,8 +53,30 @@ export async function cropTransparentObject(image: Blob): Promise<Blob> {
     context.scale(output.width / paddedWidth, output.height / paddedHeight);
     context.drawImage(bitmap, padding - left, padding - top);
 
+    const silhouette = document.createElement("canvas");
+    silhouette.width = output.width;
+    silhouette.height = output.height;
+    const silhouetteContext = silhouette.getContext("2d");
+    if (!silhouetteContext) throw new Error("Image processing is unavailable.");
+    silhouetteContext.drawImage(output, 0, 0);
+    silhouetteContext.globalCompositeOperation = "source-in";
+    silhouetteContext.fillStyle = "#ffffff";
+    silhouetteContext.fillRect(0, 0, silhouette.width, silhouette.height);
+
+    const outlined = document.createElement("canvas");
+    outlined.width = output.width;
+    outlined.height = output.height;
+    const outlineContext = outlined.getContext("2d");
+    if (!outlineContext) throw new Error("Image processing is unavailable.");
+    const radius = Math.max(2, Math.min(12, Math.round(Math.max(output.width, output.height) * 0.008)));
+    for (let index = 0; index < 24; index++) {
+      const angle = index * Math.PI / 12;
+      outlineContext.drawImage(silhouette, Math.cos(angle) * radius, Math.sin(angle) * radius);
+    }
+    outlineContext.drawImage(output, 0, 0);
+
     return await new Promise<Blob>((resolve, reject) => {
-      output.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Could not save the object image.")), "image/png");
+      outlined.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Could not save the object image.")), "image/png");
     });
   } finally {
     bitmap.close();

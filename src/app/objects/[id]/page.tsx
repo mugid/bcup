@@ -84,9 +84,9 @@ export default function ObjectPage() {
       ) : (
         <article className="flex flex-col gap-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={photo.url ?? undefined} alt={photo.label ? `Photo of ${photo.label}` : "Saved photo"} className="aspect-square w-full rounded-panel bg-surface object-cover" />
+          <img src={photo.url ?? undefined} alt={photo.label ? `Photo of ${photo.label}` : "Saved photo"} className="aspect-square w-full rounded-panel object-contain" />
           <div className="flex flex-col gap-1">
-            <h1 className="text-2xl font-semibold leading-tight">{photo.label === null ? "No clear object" : photo.label ?? "Identifying…"}</h1>
+            <h1 className="text-2xl font-semibold leading-tight">{photo.label === null ? "No clear object" : photo.label ?? "Not identified yet"}</h1>
             <p className="text-sm text-fg-2">{photo.language}</p>
           </div>
           <div className="flex max-w-md flex-col gap-2">
@@ -94,7 +94,7 @@ export default function ObjectPage() {
             <CategoryPicker categories={categories} value={photo.categoryId ?? null} onChange={(categoryId) => void changeCategory(categoryId)} />
           </div>
           {error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
-          <Button className="w-fit" pending={pending} onClick={() => void retryIdentification()}>{photo.language ? "Retry AI" : "Identify object"}</Button>
+          <Button className="w-fit" pending={pending} onClick={() => void retryIdentification()}>{photo.label === undefined ? "Identify object" : "Retry AI"}</Button>
         </article>
       )}
     </main>
