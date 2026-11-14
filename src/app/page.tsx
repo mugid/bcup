@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon, Image } from "@/components/lime/icon";
 import { Dropzone } from "@/components/lime/ui/dropzone";
+import { LanguagePicker, LANGUAGES, type Language } from "@/components/lime/ui/language-picker";
 
 const DATABASE_NAME = "bcup-photos";
 const STORE_NAME = "photos";
@@ -51,6 +52,31 @@ export default function Home() {
   const [photos, setPhotos] = useState<DisplayPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [language, setLanguage] = useState<Language>("Spanish");
+
+  useEffect(() => {
+    let active = true;
+    try {
+      const saved = localStorage.getItem("bcup-language");
+      if (LANGUAGES.some((option) => option === saved)) {
+        queueMicrotask(() => {
+          if (active) setLanguage(saved as Language);
+        });
+      }
+    } catch {
+      // Keep the default when browser storage is unavailable.
+    }
+    return () => { active = false; };
+  }, []);
+
+  function handleLanguageChange(nextLanguage: Language) {
+    setLanguage(nextLanguage);
+    try {
+      localStorage.setItem("bcup-language", nextLanguage);
+    } catch {
+      // The selection still works for the current visit.
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -110,7 +136,11 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col bg-page px-4 py-8 text-fg sm:px-6">
+    <div className="relative min-h-dvh bg-page text-fg">
+      <div className="absolute left-4 top-4 z-10">
+        <LanguagePicker value={language} onChange={handleLanguageChange} />
+      </div>
+      <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-4 py-8 sm:px-6">
       {loading ? null : photos.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
           <Icon icon={Image} size={48} className="text-fg-2" />
@@ -126,7 +156,7 @@ export default function Home() {
           {error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
         </div>
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 pt-20">
           <div className="flex items-center justify-between gap-4">
             <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">
               Your photos
@@ -148,6 +178,7 @@ export default function Home() {
           </div>
         </div>
       )}
-    </main>
+      </main>
+    </div>
   );
 }

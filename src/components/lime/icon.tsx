@@ -13,6 +13,14 @@ export function Image(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function Checkmark(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="m5 12 5 5L19 7" />
+    </svg>
+  );
+}
+
 export function Icon({ icon: Glyph, size = 32, className }: { icon: Glyph; size?: number; className?: string }) {
   return <Glyph width={size} height={size} className={className} aria-hidden="true" />;
 }

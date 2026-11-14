@@ -20,7 +20,7 @@ export function Dropzone({ onFilesSelected, size = "md" }: DropzoneProps) {
         capture="environment"
         className="sr-only"
         tabIndex={-1}
-        aria-label="Take a photo"
+        aria-hidden="true"
         onChange={(event) => {
           const files = event.target.files;
           if (files?.length) void onFilesSelected(files);
