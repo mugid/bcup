@@ -29,6 +29,10 @@ request.
 
 Convex is connected, but the current photo screen still saves photos in this
 browser. The `photos` table is reserved for a later backend photo flow.
+Categories and photo assignments also stay in this browser. On upload, AI
+identifies the object and selects an existing category or suggests a common new
+one. You can create categories and change any photo's category yourself; a
+manual choice is preserved when AI identification is retried.
 
 ## Checks
 

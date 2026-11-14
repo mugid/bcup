@@ -9,7 +9,9 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const identificationSchema = z.object({
   label: z.string().trim().max(80).nullable(),
+  category: z.string().trim().max(60).nullable(),
 });
+const categoriesSchema = z.array(z.string().trim().min(1).max(60)).max(2000);
 
 export async function POST(request: Request) {
   const openaiKey = process.env.OPENAI_API_KEY;
@@ -33,6 +35,13 @@ export async function POST(request: Request) {
     return Response.json({ error: "Image must be under 5 MB." }, { status: 413 });
   }
 
+  let existingCategories: string[];
+  try {
+    existingCategories = categoriesSchema.parse(JSON.parse(String(form.get("categories") ?? "[]")));
+  } catch {
+    return Response.json({ error: "Invalid categories." }, { status: 400 });
+  }
+
   try {
     const result = await generateText({
       model: openai.responses("gpt-6.1-terra"),
@@ -42,14 +51,15 @@ export async function POST(request: Request) {
         content: [
           {
             type: "text",
-            text: `Identify the one most prominent physical object in this image. Return only its natural, specific noun in ${language}; use Simplified Chinese for Chinese and Brazilian Portuguese for Portuguese. Do not include an article, transliteration, explanation, or punctuation. If there is no clearly identifiable object, return null.`,
+            text: `Identify the one most prominent physical object in this image. Return its natural, specific noun as label in ${language}; use Simplified Chinese for Chinese and Brazilian Portuguese for Portuguese. Do not include an article, transliteration, explanation, or punctuation in the label. Also return a short, common English category for that object (for example Kitchen, Clothing, Furniture, Electronics, Food, or Sports). Choose an existing category whenever it reasonably fits; otherwise suggest a familiar broad category, not the object's name. Existing categories: ${JSON.stringify(existingCategories)}. If there is no clearly identifiable object, return null for both label and category.`,
           },
           { type: "file", data: await photo.arrayBuffer(), mediaType: photo.type },
         ],
       }],
     });
 
-    return Response.json({ label: result.output.label || null });
+    const label = result.output.label || null;
+    return Response.json({ label, category: label ? result.output.category || null : null });
   } catch (error) {
     const cause = RetryError.isInstance(error) ? error.lastError : error;
     const name = cause instanceof Error ? cause.name : "UnknownError";
