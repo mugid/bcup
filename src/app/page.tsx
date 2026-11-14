@@ -18,10 +18,10 @@ import { useLimePortal } from "@/lib/lime/portal";
 type Photo = NonNullable<ReturnType<typeof useQuery<typeof api.photos.list>>>[number];
 type IdentifiablePhoto = Pick<Photo, "_id" | "url">;
 
-function CategoryCard({ name, photos }: { name: string; photos: Photo[] }) {
+function CategoryCard({ name, emoji: savedEmoji, photos }: { name: string; emoji?: string; photos: Photo[] }) {
   const [open, setOpen] = useState(false);
   const portal = useLimePortal();
-  const emoji = categoryEmoji(name);
+  const emoji = categoryEmoji(name, savedEmoji);
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -151,7 +151,8 @@ export default function Home() {
           !(typeof suggestedCategory === "string" || suggestedCategory === null)) {
         throw new Error("Invalid identification result");
       }
-      await applyIdentification({ ownerId, photoId: photo._id, language: photoLanguage, label, suggestedCategory });
+      const pronunciation = "pronunciation" in result && typeof result.pronunciation === "string" ? result.pronunciation : null;
+      await applyIdentification({ ownerId, photoId: photo._id, language: photoLanguage, label, suggestedCategory, pronunciation });
       setError("");
     } catch (cause) {
       setPendingIds((current) => {
@@ -206,12 +207,13 @@ export default function Home() {
 
   const readyPhotos = photos.filter((photo) => photo.label !== undefined);
   const needsIdentification = photos.filter((photo) => photo.label === undefined && !pendingIds.has(photo._id));
-  const groupedPhotos: { id: string; name: string; photos: Photo[] }[] = categories.map((category) => ({
+  const groupedPhotos: { id: string; name: string; emoji?: string; photos: Photo[] }[] = categories.map((category) => ({
     id: category._id,
     name: category.name,
-    photos: readyPhotos.filter((photo) => photo.categoryId === category._id),
+    emoji: category.emoji,
+    photos: readyPhotos.filter((photo) => photo.categoryIds.includes(category._id)),
   })).filter((group) => group.photos.length > 0);
-  const uncategorized = readyPhotos.filter((photo) => !photo.categoryId || !categories.some((category) => category._id === photo.categoryId));
+  const uncategorized = readyPhotos.filter((photo) => !photo.categoryIds.some((id) => categories.some((category) => category._id === id)));
   if (uncategorized.length > 0) groupedPhotos.push({ id: "uncategorized", name: "Uncategorized", photos: uncategorized });
 
   return (
@@ -244,7 +246,7 @@ export default function Home() {
             )}
             {error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {groupedPhotos.map((group) => <CategoryCard key={group.id} name={group.name} photos={group.photos} />)}
+              {groupedPhotos.map((group) => <CategoryCard key={group.id} name={group.name} emoji={group.emoji} photos={group.photos} />)}
             </div>
             {needsIdentification.length > 0 && (
               <div className="flex flex-col gap-2">

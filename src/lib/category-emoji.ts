@@ -5,6 +5,6 @@ const categoryEmojis: Record<string, string> = {
   office: "📎", pets: "🐾", art: "🎨", travel: "🧳",
 };
 
-export function categoryEmoji(name: string) {
-  return categoryEmojis[name.trim().toLocaleLowerCase("en-US")] ?? "📦";
+export function categoryEmoji(name: string, emoji?: string) {
+  return emoji || categoryEmojis[name.trim().toLocaleLowerCase("en-US")] || "📦";
 }

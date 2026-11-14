@@ -10,8 +10,8 @@ export const list = query({
 });
 
 export const create = mutation({
-  args: { ownerId: v.string(), value: v.string() },
-  handler: async (ctx, { ownerId, value }) => {
+  args: { ownerId: v.string(), value: v.string(), emoji: v.optional(v.string()) },
+  handler: async (ctx, { ownerId, value, emoji }) => {
     const name = value.normalize("NFC").trim().replace(/\s+/g, " ");
     if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/.test(name)) {
       throw new Error("Enter a category name of up to 60 characters.");
@@ -19,6 +19,7 @@ export const create = mutation({
     const nameKey = name.toLocaleLowerCase("en-US");
     const existing = await ctx.db.query("categories").withIndex("by_owner_name", (q) => q.eq("ownerId", ownerId).eq("nameKey", nameKey)).unique();
     if (existing) throw new Error("This category already exists.");
-    return ctx.db.insert("categories", { ownerId, name, nameKey, origin: "user" });
+    if (emoji && ([...emoji].length > 8 || /[\u0000-\u001f\u007f]/.test(emoji))) throw new Error("Choose a valid emoji.");
+    return ctx.db.insert("categories", { ownerId, name, nameKey, emoji, origin: "user" });
   },
 });
