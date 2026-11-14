@@ -48,7 +48,7 @@ const buttonVariants = cva(
         icon: 'size-(--control-md) px-0',
         'icon-lg': 'size-(--control-lg) px-0',
         'icon-round': 'size-(--control-lg) rounded-full px-0',
-        category: 'h-auto w-full flex-col items-stretch gap-4 rounded-panel whitespace-normal p-4 text-left',
+        category: 'h-auto w-full flex-col items-stretch gap-2 rounded-panel whitespace-normal p-3 text-left',
       },
     },
     compoundVariants: [

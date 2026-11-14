@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+.collection-action-deck {
+  bottom: calc(var(--control-sm) / 2 + env(safe-area-inset-bottom));
+}
+
 .category-backdrop {
   opacity: 1;
   transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1);

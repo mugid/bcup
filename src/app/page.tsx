@@ -2,19 +2,28 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
+import { Tabs } from "@base-ui/react/tabs";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { Icon, Image } from "@/components/lime/icon";
 import { Button, Spinner } from "@/components/lime/ui/button";
-import { Dropzone } from "@/components/lime/ui/dropzone";
+import { Dropzone, VideoPicker } from "@/components/lime/ui/dropzone";
 import { LanguagePicker } from "@/components/lime/ui/language-picker";
+import { PracticeQuiz } from "@/components/practice-quiz";
 import { isLanguage, type Language } from "@/lib/languages";
 import { categoryEmoji } from "@/lib/category-emoji";
 import { cropTransparentObject } from "@/lib/cutout";
 import { resizeForIdentification } from "@/lib/resize-for-identification";
+import { extractClipFrames } from "@/lib/clip-frames";
 type Photo = NonNullable<ReturnType<typeof useQuery<typeof api.photos.list>>>[number];
 type IdentifiablePhoto = Pick<Photo, "_id" | "url">;
+type HomeTab = "collections" | "videos" | "practice";
+type ClipAnalysis = { title: string; descriptions: { text: string; translation: string }[]; words: { text: string; translation: string }[] };
+
+function isHomeTab(value: string | null): value is HomeTab {
+  return value === "collections" || value === "videos" || value === "practice";
+}
 
 type Bounds = { left: number; top: number; width: number; height: number };
 function CategoryCard({ id, name, emoji: savedEmoji, photos, activeId, closing, closingInstant, restoreFocus, onOpen, onRequestClose, onClosed }: {
@@ -151,7 +160,7 @@ function CategoryCard({ id, name, emoji: savedEmoji, photos, activeId, closing, 
         <>
           <Button ref={activeTriggerRef} variant="plain" size="category" onClick={open} aria-expanded="true" aria-label={`Close ${name}`}>
             <span className="flex w-full items-start justify-between gap-3">
-              <span className="min-w-0 truncate text-lg font-semibold text-fg">{emoji} {name}</span>
+              <span className="min-w-0 break-words text-lg font-semibold text-fg">{emoji} {name}</span>
               <span className="grid shrink-0 text-sm text-fg-2 [grid-template-areas:'stack']">
                 <span ref={countRef} aria-hidden="true" className={`[grid-area:stack] ${instant ? "opacity-0" : "opacity-100"}`}>{photos.length} {photos.length === 1 ? "object" : "objects"}</span>
                 <span ref={closeLabelRef} aria-hidden="true" className={`justify-self-end [grid-area:stack] ${instant ? "opacity-100" : "opacity-0"}`}>Close</span>
@@ -159,13 +168,13 @@ function CategoryCard({ id, name, emoji: savedEmoji, photos, activeId, closing, 
             </span>
           </Button>
           <div className="relative min-h-0 flex-1">
-          <div ref={previewRef} aria-hidden="true" className={`absolute inset-0 grid grid-cols-3 gap-2 px-4 pb-4 ${instant ? "opacity-0" : "opacity-100"}`}>
+          <div ref={previewRef} aria-hidden="true" className={`absolute inset-0 grid grid-cols-3 content-start gap-2 px-3 pb-3 ${instant ? "opacity-0" : "opacity-100"}`}>
             {photos.slice(0, 3).map((photo) => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={photo._id} src={photo.url ?? undefined} alt="" style={origin ? { width: (origin.width - 48) / 3, height: (origin.width - 48) / 3 } : undefined} className="rounded-field object-contain" />
+              <img key={photo._id} src={photo.url ?? undefined} alt="" className="size-(--control-lg) rounded-field object-contain" />
             ))}
           </div>
-          <div ref={detailsRef} aria-hidden={!showDetails} inert={!showDetails} className={`absolute inset-0 grid grid-cols-2 content-start gap-3 overflow-y-auto px-4 pb-4 sm:grid-cols-3 ${instant ? "opacity-100" : "opacity-0"}`}>
+          <div ref={detailsRef} aria-hidden={!showDetails} inert={!showDetails} className={`absolute inset-0 grid grid-cols-2 content-start gap-3 overflow-y-auto px-3 pb-3 sm:grid-cols-3 ${instant ? "opacity-100" : "opacity-0"}`}>
             {photos.map((photo) => (
               <Link key={photo._id} href={`/objects/${photo._id}`} className="flex min-w-0 flex-col items-center gap-2 rounded-panel p-2 text-center text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -178,13 +187,13 @@ function CategoryCard({ id, name, emoji: savedEmoji, photos, activeId, closing, 
         </>
       ) : <Button ref={triggerRef} id={`category-trigger-${id}`} type="button" variant="plain" size="category" onClick={open} aria-expanded="false" aria-label={`Open ${name}`}>
         <span className="flex w-full items-start justify-between gap-3">
-          <span className="min-w-0 truncate text-lg font-semibold text-fg">{emoji} {name}</span>
+          <span className="min-w-0 break-words text-lg font-semibold text-fg">{emoji} {name}</span>
           <span className="shrink-0 text-sm text-fg-2">{photos.length} {photos.length === 1 ? "object" : "objects"}</span>
         </span>
-        <span className="grid w-full grid-cols-3 gap-2">
+        <span className="grid w-fit grid-cols-3 gap-2">
           {photos.slice(0, 3).map((photo) => (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={photo._id} src={photo.url ?? undefined} alt="" className="aspect-square w-full rounded-field object-contain" />
+            <img key={photo._id} src={photo.url ?? undefined} alt="" className="size-(--control-lg) rounded-field object-contain" />
           ))}
         </span>
       </Button>}
@@ -204,18 +213,38 @@ export default function Home() {
   const categories = categoryResults ?? [];
   const dataReady = photoResults !== undefined && categoryResults !== undefined && clipResults !== undefined;
   const createPhoto = useMutation(api.photos.create);
+  const createClip = useMutation(api.clips.create);
   const generateUploadUrl = useMutation(api.photos.generateUploadUrl);
   const applyIdentification = useMutation(api.photos.applyIdentification);
   const identificationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [isPreparing, setIsPreparing] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
+  const [videoError, setVideoError] = useState("");
+  const [videoStatus, setVideoStatus] = useState("");
+  const [videoBusy, setVideoBusy] = useState(false);
   const [language, setLanguage] = useState<Language>("Spanish");
+  const [activeTab, setActiveTab] = useState<HomeTab>("collections");
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [closingCategory, setClosingCategory] = useState(false);
   const [instantCategory, setInstantCategory] = useState(false);
   const [closingInstant, setClosingInstant] = useState(false);
   const [restoreCategoryFocus, setRestoreCategoryFocus] = useState(false);
+  useEffect(() => {
+    const syncTab = () => {
+      const requested = new URLSearchParams(window.location.search).get("tab");
+      setActiveTab(isHomeTab(requested) ? requested : "collections");
+    };
+    syncTab();
+    window.addEventListener("popstate", syncTab);
+    return () => window.removeEventListener("popstate", syncTab);
+  }, []);
+
+  function changeTab(next: HomeTab) {
+    setActiveTab(next);
+    const url = next === "collections" ? "/" : `/?tab=${next}`;
+    if (window.location.pathname + window.location.search !== url) window.history.pushState(null, "", url);
+  }
   const openCategory = useCallback((id: string, instant: boolean) => {
     setClosingCategory(false);
     setClosingInstant(false);
@@ -343,6 +372,7 @@ export default function Home() {
 
   async function handlePhotoSelection(files: File[]) {
     if (!ownerId || isPreparing) return;
+    changeTab("collections");
     const selected = files.filter((file) => file.type.startsWith("image/"));
     if (selected.length === 0) {
       setError("Choose a photo to add.");
@@ -376,6 +406,43 @@ export default function Home() {
     }
   }
 
+  async function uploadVideoBlob(blob: Blob): Promise<Id<"_storage">> {
+    const url = await generateUploadUrl({});
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": blob.type }, body: blob });
+    if (!response.ok) throw new Error("Could not upload the video. Try again.");
+    const result = await response.json() as { storageId: Id<"_storage"> };
+    return result.storageId;
+  }
+
+  async function handleVideoSelection(file: File | null) {
+    if (!file || !ownerId || videoBusy) return;
+    changeTab("videos");
+    setVideoError("");
+    setVideoStatus("");
+    if (!["video/mp4", "video/webm", "video/quicktime"].includes(file.type)) { setVideoError("Choose an MP4, WebM, or MOV video."); return; }
+    if (file.size === 0 || file.size > 20 * 1024 * 1024) { setVideoError("Choose a video under 20 MB."); return; }
+    const selectedLanguage = language;
+    setVideoBusy(true);
+    try {
+      const { frames } = await extractClipFrames(file);
+      const form = new FormData();
+      form.append("language", selectedLanguage);
+      frames.forEach((frame, index) => form.append("frames", frame, `frame-${index}.jpg`));
+      const response = await fetch("/api/describe-clip", { method: "POST", body: form });
+      const data: unknown = await response.json();
+      if (!response.ok) throw new Error(data && typeof data === "object" && "error" in data && typeof data.error === "string" ? data.error : "Could not describe this clip.");
+      if (!data || typeof data !== "object" || !("title" in data) || !("descriptions" in data) || !("words" in data) ||
+          typeof data.title !== "string" || !Array.isArray(data.descriptions) || !Array.isArray(data.words)) throw new Error("Invalid description response.");
+      const [storageId, posterStorageId] = await Promise.all([uploadVideoBlob(file), uploadVideoBlob(frames[0])]);
+      await createClip({ ownerId, storageId, posterStorageId, language: selectedLanguage, ...(data as ClipAnalysis) });
+      setVideoStatus("Video added to your memories.");
+    } catch (cause) {
+      setVideoError(cause instanceof Error ? cause.message : "Could not save this video. Try again.");
+    } finally {
+      setVideoBusy(false);
+    }
+  }
+
   const readyPhotos = photos.filter((photo) => photo.label !== undefined);
   const needsIdentification = photos.filter((photo) => photo.label === undefined && !pendingIds.has(photo._id));
   const groupedPhotos: { id: string; name: string; emoji?: string; photos: Photo[] }[] = categories.map((category) => ({
@@ -390,61 +457,49 @@ export default function Home() {
   return (
     <div className="relative min-h-dvh bg-page text-fg">
       {activeCategoryId !== null && <div aria-hidden="true" onPointerDown={() => requestCloseCategory()} className={`category-backdrop fixed inset-0 z-[calc(var(--z-dialog)-1)] bg-scrim ${closingCategory ? "category-backdrop-exit" : ""} ${instantCategory || closingInstant ? "category-backdrop-instant" : ""}`} />}
-      <div className="absolute inset-x-4 top-4 z-10 flex items-center justify-between gap-3 sm:inset-x-6">
-        <LanguagePicker value={language} onChange={handleLanguageChange} />
-        <Button variant="outline" onClick={() => { window.location.href = "/upgrade"; }}>See Plus plan</Button>
-      </div>
-      <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-4 py-8 sm:px-6">
-        {!ownerId ? <p role="alert" className="pt-20 text-sm text-danger-text">{error}</p> : !dataReady ? null : photos.length === 0 && clips.length === 0 && !isPreparing ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
-            <Icon icon={Image} size={48} className="text-fg-2" />
-            <div className="flex flex-col gap-2">
-              <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">No photos yet</h1>
-              <p className="max-w-md text-base text-fg-2">Add your first photo to see it here.</p>
-            </div>
-            <Dropzone size="lg" onFilesSelected={handlePhotoSelection} disabled={isPreparing} />
-            <Button variant="outline" size="lg" onClick={() => { window.location.href = "/clips/new"; }}>Add a video</Button>
-            {error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-6 pt-20">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">Your collection</h1>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" onClick={() => { window.location.href = "/quiz"; }}>Practice words</Button>
-                <Dropzone onFilesSelected={handlePhotoSelection} disabled={isPreparing} />
-                <Button variant="outline" onClick={() => { window.location.href = "/clips/new"; }}>Add a video</Button>
-              </div>
-            </div>
-            {(isPreparing || pendingIds.size > 0) && (
-              <p role="status" className="flex items-center gap-2 text-sm text-fg-2">
-                <Spinner size={16} />
-                {isPreparing ? "Preparing photos…" : "Identifying photos…"}
-              </p>
-            )}
-            {error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
+      <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-4 pt-8 pb-52 sm:px-6 sm:pb-28">
+        <h1 className="sr-only">BCup</h1>
+        {!ownerId && error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
+        <Tabs.Root value={activeTab} onValueChange={(value) => { if (isHomeTab(value)) changeTab(value); }}>
+          <Tabs.List aria-label="Library" className="flex items-center justify-between gap-2 overflow-x-auto border-b border-line">
+            <Tabs.Tab value="collections" className="shrink-0 whitespace-nowrap border-b-2 border-transparent px-2 py-3 text-sm font-medium text-fg-2 data-active:border-fg data-active:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:text-base">Collections</Tabs.Tab>
+            <Tabs.Tab value="videos" className="shrink-0 whitespace-nowrap border-b-2 border-transparent px-2 py-3 text-sm font-medium text-fg-2 data-active:border-fg data-active:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:text-base">Video memories</Tabs.Tab>
+            <Tabs.Tab value="practice" className="shrink-0 whitespace-nowrap border-b-2 border-transparent px-2 py-3 text-sm font-medium text-fg-2 data-active:border-fg data-active:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:text-base">Practice</Tabs.Tab>
+          </Tabs.List>
+          <Tabs.Panel value="collections" className="flex flex-col gap-6 pt-6">
+            {(isPreparing || pendingIds.size > 0) && <p role="status" className="flex items-center gap-2 text-sm text-fg-2"><Spinner size={16} />{isPreparing ? "Preparing photos…" : "Identifying photos…"}</p>}
+            {ownerId && error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
+            {dataReady && photos.length === 0 && !isPreparing && <div className="flex flex-col items-center gap-2 py-16 text-center"><Icon icon={Image} size={48} className="text-fg-2" /><h2 className="text-lg font-semibold">No collections yet</h2><p className="text-base text-fg-2">Add a photo using the controls below.</p></div>}
             <div className="mx-auto grid w-full max-w-overlay-lg grid-cols-1 gap-4">
               {groupedPhotos.map((group) => <CategoryCard key={group.id} id={group.id} name={group.name} emoji={group.emoji} photos={group.photos} activeId={activeCategoryId} closing={closingCategory} closingInstant={closingInstant} restoreFocus={restoreCategoryFocus} onOpen={openCategory} onRequestClose={requestCloseCategory} onClosed={finishCloseCategory} />)}
             </div>
-            {clips.length > 0 && <section className="flex flex-col gap-3"><h2 className="text-lg font-semibold">Your videos</h2><div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{clips.map((clip) => <Link key={clip._id} href={`/clips/${clip._id}`} className="overflow-hidden rounded-panel border border-line bg-surface text-fg transition-[background-color] duration-(--dur-fast) hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+            {needsIdentification.length > 0 && <section className="flex flex-col gap-2"><h2 className="text-lg font-semibold">Needs identification</h2>{needsIdentification.map((photo) => <Link key={photo._id} href={`/objects/${photo._id}`} className="flex items-center gap-3 rounded-panel p-2 text-fg hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photo.url ?? undefined} alt="" className="size-(--control-lg) shrink-0 rounded-field object-contain" /><span className="text-sm">Open photo to retry</span></Link>)}</section>}
+          </Tabs.Panel>
+          <Tabs.Panel value="videos" className="flex flex-col gap-6 pt-6">
+            {videoBusy && <p role="status" className="flex items-center gap-2 text-sm text-fg-2"><Spinner size={16} />Reading the clip, writing sentences, and saving it…</p>}
+            {videoError && <p role="alert" className="text-sm text-danger-text">{videoError}</p>}
+            {videoStatus && <p role="status" className="text-sm text-fg-2">{videoStatus}</p>}
+            {dataReady && clips.length === 0 && !videoBusy && <div className="flex flex-col items-center gap-2 py-16 text-center"><h2 className="text-lg font-semibold">No video memories yet</h2><p className="text-base text-fg-2">Upload a short video using the control below.</p></div>}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{clips.map((clip) => <Link key={clip._id} href={`/clips/${clip._id}`} className="overflow-hidden rounded-panel border border-line bg-surface text-fg transition-[background-color] duration-(--dur-fast) hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={clip.posterUrl ?? undefined} alt="" className="aspect-video w-full object-cover" />
-              <div className="flex flex-col gap-1 p-4"><span className="font-semibold">{clip.title}</span><span className="text-sm text-fg-2">{clip.language} · {clip.descriptions.length} descriptions</span></div></Link>)}</div></section>}
-            {needsIdentification.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <h2 className="text-lg font-semibold">Needs identification</h2>
-                {needsIdentification.map((photo) => (
-                  <Link key={photo._id} href={`/objects/${photo._id}`} className="flex items-center gap-3 rounded-panel p-2 text-fg hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={photo.url ?? undefined} alt="" className="size-(--control-lg) shrink-0 rounded-field object-contain" />
-                    <span className="text-sm">Open photo to retry</span>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+              <div className="flex flex-col gap-1 p-4"><span className="font-semibold">{clip.title}</span><span className="text-sm text-fg-2">{clip.language} · {clip.descriptions.length} descriptions</span></div></Link>)}</div>
+          </Tabs.Panel>
+          <Tabs.Panel value="practice">{activeTab === "practice" && <PracticeQuiz ownerId={ownerId} language={language} />}</Tabs.Panel>
+        </Tabs.Root>
       </main>
+      <nav aria-label="Collection actions" className="collection-action-deck fixed inset-x-4 z-20 mx-auto flex w-auto max-w-5xl flex-col gap-2 rounded-sheet border border-line bg-raised p-3 shadow-menu sm:inset-x-6 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 items-center gap-2">
+          <LanguagePicker value={language} onChange={handleLanguageChange} />
+          <Dropzone onFilesSelected={handlePhotoSelection} disabled={isPreparing || !ownerId} primary={activeTab === "collections"} className="min-w-0 flex-1 flex-nowrap" buttonClassName="min-w-0 flex-1" />
+        </div>
+        <div className="flex min-w-0 items-center justify-between gap-2 sm:ml-auto">
+          <VideoPicker onFileSelected={(file) => { void handleVideoSelection(file); }} disabled={videoBusy || !ownerId} pending={videoBusy} primary={activeTab === "videos"} label="Upload video" />
+          <Button variant="ghost" size="sm" onClick={() => { window.location.href = "/upgrade"; }}>View Plus</Button>
+        </div>
+      </nav>
     </div>
   );
 }

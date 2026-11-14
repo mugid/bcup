@@ -4,14 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { Button } from "@/components/lime/ui/button";
 import { useLimePortal } from "@/lib/lime/portal";
+import { cn } from "@/lib/lime/utils";
 
 type DropzoneProps = {
   onFilesSelected: (files: File[]) => void | Promise<void>;
   size?: "md" | "lg";
   disabled?: boolean;
+  className?: string;
+  buttonClassName?: string;
+  primary?: boolean;
 };
 
-export function Dropzone({ onFilesSelected, size = "md", disabled = false }: DropzoneProps) {
+export function Dropzone({ onFilesSelected, size = "md", disabled = false, className, buttonClassName, primary = true }: DropzoneProps) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -89,12 +93,12 @@ export function Dropzone({ onFilesSelected, size = "md", disabled = false }: Dro
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2">
+    <div className={cn("flex flex-wrap items-center justify-center gap-2", className)}>
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" disabled={disabled} className="sr-only" tabIndex={-1} aria-hidden="true" onChange={handleFileChange} />
       <input ref={uploadInputRef} type="file" accept="image/*" multiple disabled={disabled} className="sr-only" tabIndex={-1} aria-hidden="true" onChange={handleFileChange} />
-      <Button size={size} className="sm:hidden" pending={disabled} onClick={() => cameraInputRef.current?.click()}>Take a photo</Button>
-      <Button size={size} className="hidden sm:inline-flex" pending={disabled} onClick={() => setCameraOpen(true)}>Use webcam</Button>
-      <Button size={size} variant="outline" disabled={disabled} onClick={() => uploadInputRef.current?.click()}>Upload photos</Button>
+      <Button size={size} variant={primary ? "primary" : "outline"} className={cn("sm:hidden", buttonClassName)} disabled={disabled} onClick={() => cameraInputRef.current?.click()}>Take a photo</Button>
+      <Button size={size} variant={primary ? "primary" : "outline"} className={cn("hidden sm:inline-flex", buttonClassName)} disabled={disabled} onClick={() => setCameraOpen(true)}>Use webcam</Button>
+      <Button size={size} variant="outline" className={buttonClassName} disabled={disabled} onClick={() => uploadInputRef.current?.click()}>Upload photos</Button>
       <Dialog.Root open={cameraOpen} onOpenChange={setCameraOpen}>
         <Dialog.Portal container={portal}>
           <Dialog.Backdrop className="fixed inset-0 z-(--z-dialog) bg-scrim" />
@@ -113,10 +117,10 @@ export function Dropzone({ onFilesSelected, size = "md", disabled = false }: Dro
   );
 }
 
-export function VideoPicker({ onFileSelected, disabled = false, selected = false }: { onFileSelected: (file: File | null) => void; disabled?: boolean; selected?: boolean }) {
+export function VideoPicker({ onFileSelected, disabled = false, selected = false, label, primary = false, pending = false }: { onFileSelected: (file: File | null) => void; disabled?: boolean; selected?: boolean; label?: string; primary?: boolean; pending?: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   return <>
-    <input ref={inputRef} id="clip-file" type="file" accept="video/mp4,video/webm,video/quicktime" disabled={disabled} className="sr-only" onChange={(event) => { onFileSelected(event.target.files?.[0] ?? null); event.target.value = ""; }} />
-    <Button type="button" variant="outline" disabled={disabled} onClick={() => inputRef.current?.click()}>{selected ? "Change video" : "Choose a video"}</Button>
+    <input ref={inputRef} id="clip-file" type="file" accept="video/mp4,video/webm,video/quicktime" disabled={disabled} className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(event) => { onFileSelected(event.target.files?.[0] ?? null); event.target.value = ""; }} />
+    <Button type="button" variant={primary ? "primary" : "outline"} disabled={disabled} pending={pending} onClick={() => inputRef.current?.click()}>{label ?? (selected ? "Change video" : "Choose a video")}</Button>
   </>;
 }
