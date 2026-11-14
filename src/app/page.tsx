@@ -37,7 +37,6 @@ function CategoryCard({ id, name, emoji: savedEmoji, photos, activeId, closing, 
   const [instant, setInstant] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const activeTriggerRef = useRef<HTMLButtonElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const detailsRef = useRef<HTMLDivElement>(null);
   const countRef = useRef<HTMLSpanElement>(null);
@@ -56,7 +55,7 @@ function CategoryCard({ id, name, emoji: savedEmoji, photos, activeId, closing, 
     return { position: "fixed" as const, left: (viewport.width - width) / 2, top: (viewport.height - height) / 2, width, height };
   }, [origin, viewport, photos.length]);
 
-  function open(event: MouseEvent<HTMLButtonElement>) {
+  function open(event: MouseEvent<HTMLElement>) {
     if (isActive) {
       onRequestClose(event.detail === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches, event.detail === 0);
       return;
@@ -70,7 +69,7 @@ function CategoryCard({ id, name, emoji: savedEmoji, photos, activeId, closing, 
     setInstant(skipMotionRef.current);
     setRevealed(skipMotionRef.current);
     onOpen(id, skipMotionRef.current);
-    if (event.detail === 0) requestAnimationFrame(() => activeTriggerRef.current?.focus());
+    if (event.detail === 0) requestAnimationFrame(() => triggerRef.current?.focus());
   }
 
   useLayoutEffect(() => {
@@ -90,10 +89,10 @@ function CategoryCard({ id, name, emoji: savedEmoji, photos, activeId, closing, 
     animationRef.current.onfinish = () => setRevealed(true);
     const timing = { duration: 260, fill: "both" as const, easing: "linear" };
     contentAnimationsRef.current = [
-      previewRef.current?.animate([{ opacity: 1, offset: 0 }, { opacity: 1, offset: 0.55 }, { opacity: 0, offset: 0.76 }, { opacity: 0, offset: 1 }], timing),
-      detailsRef.current?.animate([{ opacity: 0, offset: 0 }, { opacity: 0, offset: 0.78 }, { opacity: 1, offset: 1 }], timing),
-      countRef.current?.animate([{ opacity: 1, offset: 0 }, { opacity: 1, offset: 0.55 }, { opacity: 0, offset: 0.76 }, { opacity: 0, offset: 1 }], timing),
-      closeLabelRef.current?.animate([{ opacity: 0, offset: 0 }, { opacity: 0, offset: 0.78 }, { opacity: 1, offset: 1 }], timing),
+      previewRef.current?.animate([{ opacity: 1, offset: 0 }, { opacity: 1, offset: 0.82 }, { opacity: 0, offset: 1 }], timing),
+      detailsRef.current?.animate([{ opacity: 0, offset: 0 }, { opacity: 0, offset: 0.82 }, { opacity: 1, offset: 1 }], timing),
+      countRef.current?.animate([{ opacity: 1, offset: 0 }, { opacity: 1, offset: 0.82 }, { opacity: 0, offset: 1 }], timing),
+      closeLabelRef.current?.animate([{ opacity: 0, offset: 0 }, { opacity: 0, offset: 0.82 }, { opacity: 1, offset: 1 }], timing),
     ].filter((animation): animation is Animation => Boolean(animation));
   }, [isActive, origin, position]);
 
@@ -155,26 +154,24 @@ function CategoryCard({ id, name, emoji: savedEmoji, photos, activeId, closing, 
 
   return (
     <div style={isActive && origin ? { height: origin.height } : undefined}>
-    <div ref={cardRef} style={isActive ? position : undefined} className={`flex w-full min-w-0 flex-col overflow-hidden rounded-panel border border-line bg-surface ${isActive ? "z-(--z-dialog) shadow-overlay" : ""}`}>
-      {isActive ? (
-        <>
-          <Button ref={activeTriggerRef} variant="plain" size="category" onClick={open} aria-expanded="true" aria-label={`Close ${name}`}>
-            <span className="flex w-full items-start justify-between gap-3">
-              <span className="min-w-0 break-words text-lg font-semibold text-fg">{emoji} {name}</span>
-              <span className="grid shrink-0 text-sm text-fg-2 [grid-template-areas:'stack']">
-                <span ref={countRef} aria-hidden="true" className={`[grid-area:stack] ${instant ? "opacity-0" : "opacity-100"}`}>{photos.length} {photos.length === 1 ? "object" : "objects"}</span>
-                <span ref={closeLabelRef} aria-hidden="true" className={`justify-self-end [grid-area:stack] ${instant ? "opacity-100" : "opacity-0"}`}>Close</span>
-              </span>
-            </span>
-          </Button>
-          <div className="relative min-h-0 flex-1">
-          <div ref={previewRef} aria-hidden="true" className={`absolute inset-0 grid grid-cols-3 content-start gap-2 px-3 pb-3 ${instant ? "opacity-0" : "opacity-100"}`}>
-            {photos.slice(0, 3).map((photo) => (
+    <div ref={cardRef} style={isActive ? position : undefined} onClick={isActive ? undefined : open} className={`flex w-full min-w-0 flex-col overflow-hidden rounded-panel border border-line bg-surface ${isActive ? "z-(--z-dialog) shadow-overlay" : "cursor-pointer"}`}>
+      <Button ref={triggerRef} id={`category-trigger-${id}`} type="button" variant="plain" size="category" onClick={isActive ? open : undefined} aria-expanded={isActive} aria-label={`${isActive ? "Close" : "Open"} ${name}`}>
+        <span className="flex w-full items-start justify-between gap-3">
+          <span className="min-w-0 break-words text-lg font-semibold text-fg">{emoji} {name}</span>
+          <span className="grid shrink-0 text-sm text-fg-2 [grid-template-areas:'stack']">
+            <span ref={countRef} aria-hidden="true" className={`[grid-area:stack] ${isActive && instant ? "opacity-0" : "opacity-100"}`}>{photos.length} {photos.length === 1 ? "object" : "objects"}</span>
+            <span ref={closeLabelRef} aria-hidden="true" className={`justify-self-end [grid-area:stack] ${isActive && instant ? "opacity-100" : "opacity-0"}`}>Close</span>
+          </span>
+        </span>
+      </Button>
+      <div className={`relative ${isActive ? "min-h-0 flex-1" : ""}`}>
+          <div ref={previewRef} aria-hidden="true" className={`${isActive ? "absolute inset-0" : ""} flex items-start gap-2 overflow-hidden px-3 py-4 ${isActive && instant ? "opacity-0" : "opacity-100"}`}>
+            {photos.slice(0, 11).map((photo) => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={photo._id} src={photo.url ?? undefined} alt="" className="size-(--control-lg) rounded-field object-contain" />
+              <img key={photo._id} src={photo.url ?? undefined} alt="" className="size-(--control-lg) shrink-0 rounded-field object-contain" />
             ))}
           </div>
-          <div ref={detailsRef} aria-hidden={!showDetails} inert={!showDetails} className={`absolute inset-0 grid grid-cols-2 content-start gap-3 overflow-y-auto px-3 pb-3 sm:grid-cols-3 ${instant ? "opacity-100" : "opacity-0"}`}>
+          {isActive && <div ref={detailsRef} aria-hidden={!showDetails} inert={!showDetails} className={`absolute inset-0 grid grid-cols-2 content-start gap-3 overflow-y-auto px-3 pb-3 sm:grid-cols-3 ${instant ? "opacity-100" : "opacity-0"}`}>
             {photos.map((photo) => (
               <Link key={photo._id} href={`/objects/${photo._id}`} className="flex min-w-0 flex-col items-center gap-2 rounded-panel p-2 text-center text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -182,21 +179,8 @@ function CategoryCard({ id, name, emoji: savedEmoji, photos, activeId, closing, 
                 <span className="w-full text-base font-medium break-words">{photo.label === null ? "No clear object" : photo.label ?? "Identifying…"}</span>
               </Link>
             ))}
-          </div>
-          </div>
-        </>
-      ) : <Button ref={triggerRef} id={`category-trigger-${id}`} type="button" variant="plain" size="category" onClick={open} aria-expanded="false" aria-label={`Open ${name}`}>
-        <span className="flex w-full items-start justify-between gap-3">
-          <span className="min-w-0 break-words text-lg font-semibold text-fg">{emoji} {name}</span>
-          <span className="shrink-0 text-sm text-fg-2">{photos.length} {photos.length === 1 ? "object" : "objects"}</span>
-        </span>
-        <span className="grid w-fit grid-cols-3 gap-2">
-          {photos.slice(0, 3).map((photo) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={photo._id} src={photo.url ?? undefined} alt="" className="size-(--control-lg) rounded-field object-contain" />
-          ))}
-        </span>
-      </Button>}
+          </div>}
+      </div>
     </div>
     </div>
   );
