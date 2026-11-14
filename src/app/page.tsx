@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
-import { Dialog } from "@base-ui/react/dialog";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -14,20 +13,172 @@ import { isLanguage, type Language } from "@/lib/languages";
 import { categoryEmoji } from "@/lib/category-emoji";
 import { cropTransparentObject } from "@/lib/cutout";
 import { resizeForIdentification } from "@/lib/resize-for-identification";
-import { useLimePortal } from "@/lib/lime/portal";
 type Photo = NonNullable<ReturnType<typeof useQuery<typeof api.photos.list>>>[number];
 type IdentifiablePhoto = Pick<Photo, "_id" | "url">;
 
-function CategoryCard({ name, emoji: savedEmoji, photos }: { name: string; emoji?: string; photos: Photo[] }) {
-  const [open, setOpen] = useState(false);
-  const portal = useLimePortal();
+type Bounds = { left: number; top: number; width: number; height: number };
+function CategoryCard({ id, name, emoji: savedEmoji, photos, activeId, closing, closingInstant, restoreFocus, onOpen, onRequestClose, onClosed }: {
+  id: string; name: string; emoji?: string; photos: Photo[];
+  activeId: string | null; closing: boolean; closingInstant: boolean; restoreFocus: boolean;
+  onOpen: (id: string, instant: boolean) => void; onRequestClose: (instant?: boolean, restoreFocus?: boolean) => void; onClosed: () => void;
+}) {
+  const [origin, setOrigin] = useState<Bounds | null>(null);
+  const [viewport, setViewport] = useState<{ width: number; height: number } | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [instant, setInstant] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const activeTriggerRef = useRef<HTMLButtonElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const detailsRef = useRef<HTMLDivElement>(null);
+  const countRef = useRef<HTMLSpanElement>(null);
+  const closeLabelRef = useRef<HTMLSpanElement>(null);
+  const animationRef = useRef<Animation | null>(null);
+  const contentAnimationsRef = useRef<Animation[]>([]);
+  const skipMotionRef = useRef(false);
   const emoji = categoryEmoji(name, savedEmoji);
+  const isActive = activeId === id;
+  const position = useMemo(() => {
+    if (!origin || !viewport) return undefined;
+    const columns = viewport.width >= 640 ? 3 : 2;
+    const rows = Math.ceil(photos.length / columns);
+    const width = Math.min(640, viewport.width - 32);
+    const height = Math.min(viewport.height * 0.85, Math.max(origin.height, 80 + rows * 144 + Math.max(0, rows - 1) * 12));
+    return { position: "fixed" as const, left: (viewport.width - width) / 2, top: (viewport.height - height) / 2, width, height };
+  }, [origin, viewport, photos.length]);
+
+  function open(event: MouseEvent<HTMLButtonElement>) {
+    if (isActive) {
+      onRequestClose(event.detail === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches, event.detail === 0);
+      return;
+    }
+    if (activeId !== null) return;
+    const rect = cardRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setOrigin({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
+    setViewport({ width: window.innerWidth, height: window.innerHeight });
+    skipMotionRef.current = event.detail === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    setInstant(skipMotionRef.current);
+    setRevealed(skipMotionRef.current);
+    onOpen(id, skipMotionRef.current);
+    if (event.detail === 0) requestAnimationFrame(() => activeTriggerRef.current?.focus());
+  }
+
+  useLayoutEffect(() => {
+    if (!isActive || !origin || !position || !cardRef.current || animationRef.current || skipMotionRef.current) return;
+    const frame = (bounds: Bounds) => ({
+      left: `${bounds.left}px`, top: `${bounds.top}px`,
+      width: `${bounds.width}px`, height: `${bounds.height}px`,
+    });
+    animationRef.current = cardRef.current.animate([
+      frame(origin),
+      frame(position),
+    ], {
+      duration: 260,
+      easing: "cubic-bezier(0.77, 0, 0.175, 1)",
+      fill: "both",
+    });
+    animationRef.current.onfinish = () => setRevealed(true);
+    const timing = { duration: 260, fill: "both" as const, easing: "linear" };
+    contentAnimationsRef.current = [
+      previewRef.current?.animate([{ opacity: 1, offset: 0 }, { opacity: 1, offset: 0.55 }, { opacity: 0, offset: 0.76 }, { opacity: 0, offset: 1 }], timing),
+      detailsRef.current?.animate([{ opacity: 0, offset: 0 }, { opacity: 0, offset: 0.78 }, { opacity: 1, offset: 1 }], timing),
+      countRef.current?.animate([{ opacity: 1, offset: 0 }, { opacity: 1, offset: 0.55 }, { opacity: 0, offset: 0.76 }, { opacity: 0, offset: 1 }], timing),
+      closeLabelRef.current?.animate([{ opacity: 0, offset: 0 }, { opacity: 0, offset: 0.78 }, { opacity: 1, offset: 1 }], timing),
+    ].filter((animation): animation is Animation => Boolean(animation));
+  }, [isActive, origin, position]);
+
+  useEffect(() => {
+    if (!isActive || !closing) return;
+    const animation = animationRef.current;
+    if (!animation || skipMotionRef.current || closingInstant) {
+      onClosed();
+      if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
+      return;
+    }
+    animation.onfinish = () => {
+      onClosed();
+      if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
+    };
+    animation.reverse();
+    contentAnimationsRef.current.forEach((contentAnimation) => contentAnimation.reverse());
+  }, [isActive, closing, closingInstant, restoreFocus, onClosed]);
+
+  useEffect(() => {
+    if (isActive) return;
+    animationRef.current?.cancel();
+    animationRef.current = null;
+    contentAnimationsRef.current.forEach((animation) => animation.cancel());
+    contentAnimationsRef.current = [];
+  }, [isActive]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onRequestClose(true, true);
+      } else if (event.key === "Tab" && cardRef.current) {
+        const focusable = Array.from(cardRef.current.querySelectorAll<HTMLElement>("button:not([disabled]), a[href]"))
+          .filter((element) => !element.closest("[inert]"));
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && (document.activeElement === first || !cardRef.current.contains(document.activeElement))) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || !cardRef.current.contains(document.activeElement))) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    function onResize() { setViewport({ width: window.innerWidth, height: window.innerHeight }); }
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [isActive, onRequestClose]);
+
+  const showDetails = revealed && !closing;
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Trigger className="flex w-full flex-col gap-4 rounded-panel border border-line bg-surface p-4 text-left transition-[background-color] duration-(--dur-fast) hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+    <div style={isActive && origin ? { height: origin.height } : undefined}>
+    <div ref={cardRef} style={isActive ? position : undefined} className={`flex w-full min-w-0 flex-col overflow-hidden rounded-panel border border-line bg-surface ${isActive ? "z-(--z-dialog) shadow-overlay" : ""}`}>
+      {isActive ? (
+        <>
+          <Button ref={activeTriggerRef} variant="plain" size="category" onClick={open} aria-expanded="true" aria-label={`Close ${name}`}>
+            <span className="flex w-full items-start justify-between gap-3">
+              <span className="min-w-0 truncate text-lg font-semibold text-fg">{emoji} {name}</span>
+              <span className="grid shrink-0 text-sm text-fg-2 [grid-template-areas:'stack']">
+                <span ref={countRef} aria-hidden="true" className={`[grid-area:stack] ${instant ? "opacity-0" : "opacity-100"}`}>{photos.length} {photos.length === 1 ? "object" : "objects"}</span>
+                <span ref={closeLabelRef} aria-hidden="true" className={`justify-self-end [grid-area:stack] ${instant ? "opacity-100" : "opacity-0"}`}>Close</span>
+              </span>
+            </span>
+          </Button>
+          <div className="relative min-h-0 flex-1">
+          <div ref={previewRef} aria-hidden="true" className={`absolute inset-0 grid grid-cols-3 gap-2 px-4 pb-4 ${instant ? "opacity-0" : "opacity-100"}`}>
+            {photos.slice(0, 3).map((photo) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={photo._id} src={photo.url ?? undefined} alt="" style={origin ? { width: (origin.width - 48) / 3, height: (origin.width - 48) / 3 } : undefined} className="rounded-field object-contain" />
+            ))}
+          </div>
+          <div ref={detailsRef} aria-hidden={!showDetails} inert={!showDetails} className={`absolute inset-0 grid grid-cols-2 content-start gap-3 overflow-y-auto px-4 pb-4 sm:grid-cols-3 ${instant ? "opacity-100" : "opacity-0"}`}>
+            {photos.map((photo) => (
+              <Link key={photo._id} href={`/objects/${photo._id}`} className="flex min-w-0 flex-col items-center gap-2 rounded-panel p-2 text-center text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo.url ?? undefined} alt="" className="size-[calc(var(--control-lg)*2)] rounded-field object-contain" />
+                <span className="w-full text-base font-medium break-words">{photo.label === null ? "No clear object" : photo.label ?? "Identifying…"}</span>
+              </Link>
+            ))}
+          </div>
+          </div>
+        </>
+      ) : <Button ref={triggerRef} id={`category-trigger-${id}`} type="button" variant="plain" size="category" onClick={open} aria-expanded="false" aria-label={`Open ${name}`}>
         <span className="flex w-full items-start justify-between gap-3">
-          <span className="min-w-0 text-lg font-semibold text-fg">{emoji} {name}</span>
+          <span className="min-w-0 truncate text-lg font-semibold text-fg">{emoji} {name}</span>
           <span className="shrink-0 text-sm text-fg-2">{photos.length} {photos.length === 1 ? "object" : "objects"}</span>
         </span>
         <span className="grid w-full grid-cols-3 gap-2">
@@ -36,27 +187,9 @@ function CategoryCard({ name, emoji: savedEmoji, photos }: { name: string; emoji
             <img key={photo._id} src={photo.url ?? undefined} alt="" className="aspect-square w-full rounded-field object-contain" />
           ))}
         </span>
-      </Dialog.Trigger>
-      <Dialog.Portal container={portal}>
-        <Dialog.Backdrop className="fixed inset-0 z-(--z-dialog) bg-scrim" />
-        <Dialog.Popup className="fixed left-4 top-1/2 z-(--z-dialog) flex max-h-[90dvh] inset-x-4 sm:inset-x-auto sm:left-1/2 sm:w-full sm:max-w-overlay sm:-translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-hidden rounded-sheet bg-raised p-4 shadow-overlay sm:p-6">
-          <div className="flex items-start justify-between gap-3">
-            <Dialog.Title className="text-xl font-semibold text-fg">{emoji} {name}</Dialog.Title>
-            <Dialog.Close className="rounded-control px-3 py-2 text-sm text-fg hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Close</Dialog.Close>
-          </div>
-          <div className="flex flex-col gap-2 overflow-y-auto">
-            {photos.map((photo) => (
-              <Link key={photo._id} href={`/objects/${photo._id}`} className="flex items-center gap-3 rounded-panel p-2 text-fg hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={photo.url ?? undefined} alt="" className="size-(--control-lg) shrink-0 rounded-field object-contain" />
-                <span className="min-w-0 truncate text-base font-medium">{photo.label === null ? "No clear object" : photo.label ?? "Identifying…"}</span>
-                <span aria-hidden="true" className="ml-auto text-fg-2">›</span>
-              </Link>
-            ))}
-          </div>
-        </Dialog.Popup>
-      </Dialog.Portal>
-    </Dialog.Root>
+      </Button>}
+    </div>
+    </div>
   );
 }
 
@@ -78,6 +211,42 @@ export default function Home() {
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   const [language, setLanguage] = useState<Language>("Spanish");
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const [closingCategory, setClosingCategory] = useState(false);
+  const [instantCategory, setInstantCategory] = useState(false);
+  const [closingInstant, setClosingInstant] = useState(false);
+  const [restoreCategoryFocus, setRestoreCategoryFocus] = useState(false);
+  const openCategory = useCallback((id: string, instant: boolean) => {
+    setClosingCategory(false);
+    setClosingInstant(false);
+    setRestoreCategoryFocus(false);
+    setInstantCategory(instant);
+    setActiveCategoryId(id);
+  }, []);
+  const requestCloseCategory = useCallback((instant = false, restoreFocus = false) => {
+    setClosingInstant(instant);
+    setRestoreCategoryFocus(restoreFocus);
+    setClosingCategory(true);
+  }, []);
+  const finishCloseCategory = useCallback(() => {
+    setActiveCategoryId(null);
+    setClosingCategory(false);
+    setClosingInstant(false);
+    setRestoreCategoryFocus(false);
+  }, []);
+
+  useEffect(() => {
+    if (activeCategoryId === null) return;
+    const previousOverflow = document.body.style.overflow;
+    const previousPadding = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPadding;
+    };
+  }, [activeCategoryId]);
 
   useEffect(() => {
     try {
@@ -220,6 +389,7 @@ export default function Home() {
 
   return (
     <div className="relative min-h-dvh bg-page text-fg">
+      {activeCategoryId !== null && <div aria-hidden="true" onPointerDown={() => requestCloseCategory()} className={`category-backdrop fixed inset-0 z-[calc(var(--z-dialog)-1)] bg-scrim ${closingCategory ? "category-backdrop-exit" : ""} ${instantCategory || closingInstant ? "category-backdrop-instant" : ""}`} />}
       <div className="absolute left-4 top-4 z-10">
         <LanguagePicker value={language} onChange={handleLanguageChange} />
       </div>
@@ -252,8 +422,8 @@ export default function Home() {
               </p>
             )}
             {error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {groupedPhotos.map((group) => <CategoryCard key={group.id} name={group.name} emoji={group.emoji} photos={group.photos} />)}
+            <div className="mx-auto grid w-full max-w-overlay-lg grid-cols-1 gap-4">
+              {groupedPhotos.map((group) => <CategoryCard key={group.id} id={group.id} name={group.name} emoji={group.emoji} photos={group.photos} activeId={activeCategoryId} closing={closingCategory} closingInstant={closingInstant} restoreFocus={restoreCategoryFocus} onOpen={openCategory} onRequestClose={requestCloseCategory} onClosed={finishCloseCategory} />)}
             </div>
             {clips.length > 0 && <section className="flex flex-col gap-3"><h2 className="text-lg font-semibold">Your videos</h2><div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{clips.map((clip) => <Link key={clip._id} href={`/clips/${clip._id}`} className="overflow-hidden rounded-panel border border-line bg-surface text-fg transition-[background-color] duration-(--dur-fast) hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
               {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -35,6 +35,7 @@ const buttonVariants = cva(
         secondary: 'bg-surface-2 text-fg hover:not-data-disabled:bg-surface-3 data-disabled:not-aria-busy:text-fg-disabled',
         outline: 'border border-line-strong bg-transparent text-fg hover:not-data-disabled:bg-surface data-disabled:not-aria-busy:text-fg-disabled',
         ghost: 'bg-transparent text-fg hover:not-data-disabled:bg-surface-2 data-disabled:not-aria-busy:text-fg-disabled',
+        plain: 'bg-transparent text-fg data-disabled:not-aria-busy:text-fg-disabled',
         'danger-ghost': 'bg-transparent text-danger-text hover:not-data-disabled:bg-danger-tint data-disabled:not-aria-busy:text-fg-disabled',
         destructive: 'glow glow-danger bg-danger text-on-danger data-disabled:not-aria-busy:bg-surface-2 data-disabled:not-aria-busy:text-fg-disabled',
         link: 'h-auto! min-h-6 gap-1 rounded-sm bg-transparent px-0! text-fg underline-offset-4 hover:not-data-disabled:underline data-disabled:text-fg-disabled',
@@ -47,6 +48,7 @@ const buttonVariants = cva(
         icon: 'size-(--control-md) px-0',
         'icon-lg': 'size-(--control-lg) px-0',
         'icon-round': 'size-(--control-lg) rounded-full px-0',
+        category: 'h-auto w-full flex-col items-stretch gap-4 rounded-panel whitespace-normal p-4 text-left',
       },
     },
     compoundVariants: [
