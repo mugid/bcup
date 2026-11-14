@@ -88,7 +88,7 @@ export default function Home() {
   const identificationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [photos, setPhotos] = useState<DisplayPhoto[]>([]);
   const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
-  const [failedIds, setFailedIds] = useState<Set<number>>(new Set());
+  const [photoErrors, setPhotoErrors] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [language, setLanguage] = useState<Language>("Spanish");
@@ -164,8 +164,12 @@ export default function Home() {
       form.append("photo", resized, "photo.jpg");
       form.append("language", photoLanguage);
       const response = await fetch("/api/identify", { method: "POST", body: form });
-      if (!response.ok) throw new Error("Identification request failed");
       const result: unknown = await response.json();
+      if (!response.ok) {
+        const message = result && typeof result === "object" && "error" in result &&
+          typeof result.error === "string" ? result.error : "Identification request failed.";
+        throw new Error(message);
+      }
       if (!result || typeof result !== "object" || !("label" in result)) {
         throw new Error("Invalid identification result");
       }
@@ -175,14 +179,17 @@ export default function Home() {
       setPhotos((current) => current.map((item) => item.id === photo.id
         ? { ...item, language: photoLanguage, label }
         : item));
-      setFailedIds((current) => {
-        const next = new Set(current);
-        next.delete(photo.id);
+      setPhotoErrors((current) => {
+        const next = { ...current };
+        delete next[photo.id];
         return next;
       });
-    } catch {
+    } catch (error) {
       if (!databaseRef.current) return;
-      setFailedIds((current) => new Set(current).add(photo.id));
+      setPhotoErrors((current) => ({
+        ...current,
+        [photo.id]: error instanceof Error ? error.message : "Could not identify the object.",
+      }));
     } finally {
       setPendingIds((current) => {
         const next = new Set(current);
@@ -194,9 +201,9 @@ export default function Home() {
 
   function queueIdentification(photo: SavedPhoto, photoLanguage: Language) {
     setPendingIds((current) => new Set(current).add(photo.id));
-    setFailedIds((current) => {
-      const next = new Set(current);
-      next.delete(photo.id);
+    setPhotoErrors((current) => {
+      const next = { ...current };
+      delete next[photo.id];
       return next;
     });
     identificationQueueRef.current = identificationQueueRef.current
@@ -250,7 +257,7 @@ export default function Home() {
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               {photos.map((photo) => {
                 const pending = pendingIds.has(photo.id);
-                const failed = failedIds.has(photo.id);
+                const photoError = photoErrors[photo.id];
                 return (
                   <figure key={photo.id} className="flex min-w-0 flex-col gap-2">
                     {/* Local object URLs need a plain image element. */}
@@ -263,11 +270,11 @@ export default function Home() {
                     <figcaption className="flex min-w-0 flex-col items-start gap-1">
                       <p aria-live="polite" className="text-base font-semibold text-fg">
                         {photo.label === null ? "No clear object" : photo.label ??
-                          (pending ? "Identifying…" : failed ? "Could not identify" : "Not identified")}
+                          (pending ? "Identifying…" : photoError ? "Could not identify" : "Not identified")}
                       </p>
                       {photo.language && <span className="text-xs text-fg-2">{photo.language}</span>}
                       {photo.label !== undefined && pending && <span className="text-xs text-fg-2">Identifying…</span>}
-                      {photo.label !== undefined && failed && <span role="alert" className="text-xs text-danger-text">Could not update label</span>}
+                      {photoError && <span role="alert" className="text-xs text-danger-text">{photoError}</span>}
                       <Button
                         variant="secondary"
                         size="sm"

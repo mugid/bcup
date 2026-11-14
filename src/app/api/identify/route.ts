@@ -1,4 +1,5 @@
-import { generateText, Output } from "ai";
+import { generateText, Output, RetryError } from "ai";
+import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { isLanguage } from "@/lib/languages";
 
@@ -11,7 +12,8 @@ const identificationSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  if (!process.env.AI_GATEWAY_API_KEY) {
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (!openaiKey || openaiKey === "your-openai-api-key") {
     return Response.json({ error: "AI identification is not configured." }, { status: 503 });
   }
 
@@ -33,7 +35,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await generateText({
-      model: "openai/gpt-6.1-terra",
+      model: openai.responses("gpt-6.1-terra"),
       output: Output.object({ schema: identificationSchema }),
       messages: [{
         role: "user",
@@ -42,13 +44,36 @@ export async function POST(request: Request) {
             type: "text",
             text: `Identify the one most prominent physical object in this image. Return only its natural, specific noun in ${language}; use Simplified Chinese for Chinese and Brazilian Portuguese for Portuguese. Do not include an article, transliteration, explanation, or punctuation. If there is no clearly identifiable object, return null.`,
           },
-          { type: "image", image: await photo.arrayBuffer(), mediaType: photo.type },
+          { type: "file", data: await photo.arrayBuffer(), mediaType: photo.type },
         ],
       }],
     });
 
     return Response.json({ label: result.output.label || null });
-  } catch {
+  } catch (error) {
+    const cause = RetryError.isInstance(error) ? error.lastError : error;
+    const name = cause instanceof Error ? cause.name : "UnknownError";
+    const statusCode = cause && typeof cause === "object" && "statusCode" in cause &&
+      typeof cause.statusCode === "number" ? cause.statusCode : undefined;
+    let nested: unknown = cause;
+    let networkCode: string | undefined;
+    for (let depth = 0; depth < 4 && nested && typeof nested === "object"; depth++) {
+      if ("code" in nested && typeof nested.code === "string") networkCode = nested.code;
+      nested = "cause" in nested ? nested.cause : null;
+    }
+    console.error("Photo identification failed", { name, statusCode, networkCode });
+    if (networkCode && ["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ETIMEDOUT"].includes(networkCode)) {
+      return Response.json({ error: "OpenAI is unreachable. Check the server network." }, { status: 503 });
+    }
+    if (statusCode === 401) {
+      return Response.json({ error: "OpenAI rejected the API key." }, { status: 503 });
+    }
+    if (statusCode === 403) {
+      return Response.json({ error: "OpenAI denied access to this model." }, { status: 503 });
+    }
+    if (statusCode === 429) {
+      return Response.json({ error: "AI is busy. Try again shortly." }, { status: 503 });
+    }
     return Response.json({ error: "Could not identify the object." }, { status: 502 });
   }
 }
