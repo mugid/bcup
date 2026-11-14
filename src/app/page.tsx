@@ -64,10 +64,12 @@ export default function Home() {
   const convex = useConvex();
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const photoResults = useQuery(api.photos.list, ownerId ? { ownerId } : "skip");
+  const clipResults = useQuery(api.clips.list, ownerId ? { ownerId } : "skip");
   const categoryResults = useQuery(api.categories.list, ownerId ? { ownerId } : "skip");
   const photos = photoResults ?? [];
+  const clips = clipResults ?? [];
   const categories = categoryResults ?? [];
-  const dataReady = photoResults !== undefined && categoryResults !== undefined;
+  const dataReady = photoResults !== undefined && categoryResults !== undefined && clipResults !== undefined;
   const createPhoto = useMutation(api.photos.create);
   const generateUploadUrl = useMutation(api.photos.generateUploadUrl);
   const applyIdentification = useMutation(api.photos.applyIdentification);
@@ -222,7 +224,7 @@ export default function Home() {
         <LanguagePicker value={language} onChange={handleLanguageChange} />
       </div>
       <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-4 py-8 sm:px-6">
-        {!ownerId ? <p role="alert" className="pt-20 text-sm text-danger-text">{error}</p> : !dataReady ? null : photos.length === 0 && !isPreparing ? (
+        {!ownerId ? <p role="alert" className="pt-20 text-sm text-danger-text">{error}</p> : !dataReady ? null : photos.length === 0 && clips.length === 0 && !isPreparing ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
             <Icon icon={Image} size={48} className="text-fg-2" />
             <div className="flex flex-col gap-2">
@@ -230,15 +232,17 @@ export default function Home() {
               <p className="max-w-md text-base text-fg-2">Add your first photo to see it here.</p>
             </div>
             <Dropzone size="lg" onFilesSelected={handlePhotoSelection} disabled={isPreparing} />
+            <Button variant="outline" size="lg" onClick={() => { window.location.href = "/clips/new"; }}>Add a video</Button>
             {error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
           </div>
         ) : (
           <div className="flex flex-col gap-6 pt-20">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">Your photos</h1>
+              <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">Your collection</h1>
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" onClick={() => { window.location.href = "/quiz"; }}>Practice words</Button>
                 <Dropzone onFilesSelected={handlePhotoSelection} disabled={isPreparing} />
+                <Button variant="outline" onClick={() => { window.location.href = "/clips/new"; }}>Add a video</Button>
               </div>
             </div>
             {(isPreparing || pendingIds.size > 0) && (
@@ -251,6 +255,10 @@ export default function Home() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {groupedPhotos.map((group) => <CategoryCard key={group.id} name={group.name} emoji={group.emoji} photos={group.photos} />)}
             </div>
+            {clips.length > 0 && <section className="flex flex-col gap-3"><h2 className="text-lg font-semibold">Your videos</h2><div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{clips.map((clip) => <Link key={clip._id} href={`/clips/${clip._id}`} className="overflow-hidden rounded-panel border border-line bg-surface text-fg transition-[background-color] duration-(--dur-fast) hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={clip.posterUrl ?? undefined} alt="" className="aspect-video w-full object-cover" />
+              <div className="flex flex-col gap-1 p-4"><span className="font-semibold">{clip.title}</span><span className="text-sm text-fg-2">{clip.language} · {clip.descriptions.length} descriptions</span></div></Link>)}</div></section>}
             {needsIdentification.length > 0 && (
               <div className="flex flex-col gap-2">
                 <h2 className="text-lg font-semibold">Needs identification</h2>

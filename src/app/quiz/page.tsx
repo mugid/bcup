@@ -15,7 +15,7 @@ import { categoryEmoji } from "@/lib/category-emoji";
 import { isLanguage, type Language } from "@/lib/languages";
 import { normalizeAnswer, shuffleItems } from "@/lib/quiz";
 
-type Photo = NonNullable<ReturnType<typeof useQuery<typeof api.photos.list>>>[number];
+type Card = { _id: string; label: string; url: string | null; categoryIds: Id<"categories">[]; reviewUrl: string; cue?: string };
 type Answer = { text: string; correct: boolean };
 type Stage = "setup" | "practice" | "results";
 const UNCATEGORIZED = "uncategorized";
@@ -28,7 +28,7 @@ export default function QuizPage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [count, setCount] = useState<number | null>(null);
   const [stage, setStage] = useState<Stage>("setup");
-  const [cards, setCards] = useState<Photo[]>([]);
+  const [cards, setCards] = useState<Card[]>([]);
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [recording, setRecording] = useState(false);
@@ -43,6 +43,7 @@ export default function QuizPage() {
   const recordingLimitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const photosResult = useQuery(api.photos.list, ownerId ? { ownerId } : "skip");
+  const clipsResult = useQuery(api.clips.list, ownerId ? { ownerId } : "skip");
   const categoriesResult = useQuery(api.categories.list, ownerId ? { ownerId } : "skip");
   const photos = photosResult ?? [];
   const categories = categoriesResult ?? [];
@@ -71,7 +72,12 @@ export default function QuizPage() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);
 
-  const available = photos.filter((photo) => photo.language === language && typeof photo.label === "string" && photo.label.trim() && photo.url);
+  const available: Card[] = [
+    ...photos.filter((photo) => photo.language === language && typeof photo.label === "string" && photo.label.trim() && photo.url)
+      .map((photo) => ({ _id: photo._id, label: photo.label!, url: photo.url, categoryIds: photo.categoryIds, reviewUrl: `/objects/${photo._id}` })),
+    ...(clipsResult ?? []).filter((clip) => clip.language === language && clip.posterUrl)
+      .flatMap((clip) => clip.words.map((word, index) => ({ _id: `${clip._id}:${index}`, label: word.text, url: clip.posterUrl, categoryIds: [] as Id<"categories">[], reviewUrl: `/clips/${clip._id}`, cue: word.translation }))),
+  ];
   const eligible = selectedCategories.length === 0 ? available : available.filter((photo) =>
     selectedCategories.some((id) => id === UNCATEGORIZED ? photo.categoryIds.length === 0 : photo.categoryIds.includes(id as Id<"categories">)));
   const chosenCount = Math.min(count ?? 5, eligible.length);
@@ -290,8 +296,8 @@ export default function QuizPage() {
             <p className="text-sm text-fg-2">{eligible.length} {eligible.length === 1 ? "word" : "words"} available</p>
           </Field>
           {error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
-          <Button size="lg" disabled={!ownerId || photosResult === undefined || categoriesResult === undefined || chosenCount < 1 || !Number.isInteger(chosenCount)} onClick={startQuiz}>Start quiz</Button>
-          {ownerId && photosResult !== undefined && eligible.length === 0 && <p className="text-base text-fg-2">No identified words match these choices. Add or identify photos to start practicing.</p>}
+          <Button size="lg" disabled={!ownerId || photosResult === undefined || clipsResult === undefined || categoriesResult === undefined || chosenCount < 1 || !Number.isInteger(chosenCount)} onClick={startQuiz}>Start quiz</Button>
+          {ownerId && photosResult !== undefined && clipsResult !== undefined && eligible.length === 0 && <p className="text-base text-fg-2">No words match these choices. Add photos or videos to start practicing.</p>}
           <p className="text-base text-fg-2">Recorded answers are sent for speech recognition after you pause or stop recording.</p>
         </div>
       )}
@@ -303,7 +309,7 @@ export default function QuizPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={current.url ?? undefined} alt="Object to name" className="h-full w-full object-contain" />
           </div>
-          <p className="text-center text-base text-fg-2">Say the word in {language}.</p>
+          <p className="text-center text-base text-fg-2">{current.cue ? `Say “${current.cue}” in ${language}.` : `Say the word in ${language}.`}</p>
           {currentAnswer && <div role="status" className={currentAnswer.correct ? "rounded-panel bg-success-tint p-4 text-success-text" : "rounded-panel bg-warn-tint p-4 text-warn-text"}>
             <p className="font-semibold">{currentAnswer.correct ? "Correct" : "Revise this word"}</p>
             <p>You said: {currentAnswer.text}</p><p>Answer: {current.label}</p>
@@ -319,7 +325,7 @@ export default function QuizPage() {
         <div className="mx-auto flex w-full max-w-md flex-col gap-8 pt-8">
           <div><h2 className="text-2xl font-semibold">Quiz results</h2><p className="mt-2 text-base text-fg-2">{correct.length} of {cards.length} correct in {language}</p></div>
           <section className="flex flex-col gap-3"><h2 className="text-lg font-semibold">Correct answers</h2>{correct.length ? <ul className="flex flex-col gap-2">{correct.map((card) => <li key={card._id} className="flex items-center gap-3 rounded-panel bg-surface p-3"><span className="min-w-0 flex-1 font-medium">{card.label}</span><span className="text-sm text-success-text">Correct</span></li>)}</ul> : <p className="text-base text-fg-2">No correct answers yet.</p>}</section>
-          <section className="flex flex-col gap-3"><h2 className="text-lg font-semibold">Words to revise</h2>{revise.length ? <ul className="flex flex-col gap-2">{revise.map((card) => <li key={card._id} className="flex items-center gap-3 rounded-panel bg-surface p-3"><span className="min-w-0 flex-1"><span className="block font-medium">{card.label}</span><span className="text-sm text-fg-2">{answers[card._id] ? `You said: ${answers[card._id].text}` : "Skipped"}</span></span><Link href={`/objects/${card._id}`} className="rounded-control px-3 py-2 text-sm font-medium text-fg underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Review word</Link></li>)}</ul> : <p className="text-base text-fg-2">You got every word right.</p>}</section>
+          <section className="flex flex-col gap-3"><h2 className="text-lg font-semibold">Words to revise</h2>{revise.length ? <ul className="flex flex-col gap-2">{revise.map((card) => <li key={card._id} className="flex items-center gap-3 rounded-panel bg-surface p-3"><span className="min-w-0 flex-1"><span className="block font-medium">{card.label}</span><span className="text-sm text-fg-2">{answers[card._id] ? `You said: ${answers[card._id].text}` : "Skipped"}</span></span><Link href={card.reviewUrl} className="rounded-control px-3 py-2 text-sm font-medium text-fg underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Review word</Link></li>)}</ul> : <p className="text-base text-fg-2">You got every word right.</p>}</section>
           <Button size="lg" onClick={() => setStage("setup")}>Start another quiz</Button>
         </div>
       )}

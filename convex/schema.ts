@@ -22,4 +22,13 @@ export default defineSchema({
     emoji: v.optional(v.string()),
     origin: v.union(v.literal("ai"), v.literal("user")),
   }).index("by_owner", ["ownerId"]).index("by_owner_name", ["ownerId", "nameKey"]),
+  clips: defineTable({
+    ownerId: v.string(),
+    storageId: v.id("_storage"),
+    posterStorageId: v.id("_storage"),
+    language: v.string(),
+    title: v.string(),
+    descriptions: v.array(v.object({ text: v.string(), translation: v.string(), audioStorageId: v.optional(v.id("_storage")) })),
+    words: v.array(v.object({ text: v.string(), translation: v.string() })),
+  }).index("by_owner", ["ownerId"]),
 });

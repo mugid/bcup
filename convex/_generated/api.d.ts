@@ -9,6 +9,7 @@
  */
 
 import type * as categories from "../categories.js";
+import type * as clips from "../clips.js";
 import type * as photos from "../photos.js";
 
 import type {
@@ -19,6 +20,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   categories: typeof categories;
+  clips: typeof clips;
   photos: typeof photos;
 }>;
 

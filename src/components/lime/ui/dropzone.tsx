@@ -112,3 +112,11 @@ export function Dropzone({ onFilesSelected, size = "md", disabled = false }: Dro
     </div>
   );
 }
+
+export function VideoPicker({ onFileSelected, disabled = false, selected = false }: { onFileSelected: (file: File | null) => void; disabled?: boolean; selected?: boolean }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return <>
+    <input ref={inputRef} id="clip-file" type="file" accept="video/mp4,video/webm,video/quicktime" disabled={disabled} className="sr-only" onChange={(event) => { onFileSelected(event.target.files?.[0] ?? null); event.target.value = ""; }} />
+    <Button type="button" variant="outline" disabled={disabled} onClick={() => inputRef.current?.click()}>{selected ? "Change video" : "Choose a video"}</Button>
+  </>;
+}

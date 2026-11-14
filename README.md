@@ -38,6 +38,14 @@ On upload, AI identifies the object and selects an existing category or suggests
 a common new one. You can change an object's category on its page; a manual
 choice is preserved when AI identification is retried.
 
+Short video uploads accept MP4, WebM, or MOV files up to 15 seconds and 20 MB.
+The browser samples four frames; OpenAI uses them to write three to five simple
+action descriptions with English translations and useful words or phrases.
+The original clip and a poster frame are stored in Convex. Description audio is
+generated on first play and saved there too. Clip vocabulary joins photo words
+in the existing practice quiz. Video descriptions are based on sampled visual
+frames only; audio and unseen actions are not analyzed.
+
 ## Checks
 
 ```bash
