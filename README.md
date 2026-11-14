@@ -1,5 +1,14 @@
 # Blobe
 
+## Quick guide for the jury
+
+1. Choose a learning language with the selector at the bottom of the home page.
+2. Use the camera/upload button to add a photo. Blobe removes its background, identifies the object, and places it in a collection. Open the object to hear its name, see example sentences and translations, or edit its collections.
+3. Add a short video with the same button, then open it under **Video memories** to read and hear descriptions of the action and review useful words.
+4. Open **Practice** to quiz yourself on words from your photos and videos.
+
+Photos and videos are tied to this browser. Keep its storage intact to retain access to them.
+
 Next.js App Router project using TypeScript, Tailwind CSS, ESLint, Convex, and pnpm.
 The UI uses the [Lime design system](https://design.how/systems/lime). Follow
 [the local Lime skill](.agents/skills/lime/SKILL.md) for UI changes.
