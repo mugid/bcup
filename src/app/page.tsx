@@ -170,9 +170,9 @@ export default function Home() {
       .then(() => identifyPhoto(photo, photoLanguage, sourceFile));
   }
 
-  async function handlePhotoSelection(files: FileList) {
+  async function handlePhotoSelection(files: File[]) {
     if (!ownerId || isPreparing) return;
-    const selected = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    const selected = files.filter((file) => file.type.startsWith("image/"));
     if (selected.length === 0) {
       setError("Choose a photo to add.");
       return;
