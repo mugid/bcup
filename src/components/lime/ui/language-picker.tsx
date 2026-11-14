@@ -3,19 +3,7 @@
 import { Select } from "@base-ui/react/select";
 import { Icon, Checkmark } from "@/components/lime/icon";
 import { useLimePortal } from "@/lib/lime/portal";
-
-export const LANGUAGES = [
-  "Spanish",
-  "Chinese",
-  "French",
-  "German",
-  "Japanese",
-  "Korean",
-  "Portuguese",
-  "Russian",
-] as const;
-
-export type Language = (typeof LANGUAGES)[number];
+import { LANGUAGES, type Language } from "@/lib/languages";
 
 const FLAGS: Record<Language, string> = {
   Spanish: "🇪🇸",

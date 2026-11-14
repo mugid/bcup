@@ -18,6 +18,7 @@ export function Dropzone({ onFilesSelected, size = "md" }: DropzoneProps) {
         type="file"
         accept="image/*"
         capture="environment"
+        multiple
         className="sr-only"
         tabIndex={-1}
         aria-hidden="true"
